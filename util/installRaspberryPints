@@ -35,7 +35,7 @@ FLOW_MEATERS_PACKAGES="arduino python-serial python-mysqldb php-cli
 
 # the base github repo name
 DEFAULT_REPO=https://github.com/RaspberryPints/RaspberryPints.git  
-CUSTOM_REPO=https://github.com/rtlindne/RaspberryPints.git  
+CUSTOM_REPO=https://github.com/Grooviee/RaspberryPints.git  
 FLOW_METERS_REPO=https://github.com/wyolum/alamode/raw/master/bundles/alamode-setup.tar.gz
 FLOW_METERS_STRETCH_REPO=https://github.com/wyolum/alamode/raw/master/alamode-setup/stretch-setup
 
@@ -61,12 +61,14 @@ GLOBAL_CONFIG_FILE=/etc/xdg/lxsession/LXDE-pi/autostart
 MODULE_CONFIG_FILE=/etc/modules
 BLACKLIST_CONFIG_FILE=/etc/modprobe.d/raspi-blacklist.conf
 
-MYSQL_SERVER="localhost"
-MYSQL_DB_NAME="raspberrypints"
-MYSQL_USER=""
-MYSQL_PASS=""
+MYSQL_SERVER="192.168.1.50"
+MYSQL_DB_NAME="RaspberryPints"
+MYSQL_USER="RaspberryPints"
+MYSQL_PASS="RaspberryPints"
+MYSQL_PORT="3307"
 MYSQL_RP_USER="RaspberryPints"
 MYSQL_RP_PASS="RaspberryPints"
+
 
 USE_FLOW_METERS=N
 USE_RFID=N
@@ -78,9 +80,9 @@ USE_RFID=N
 init() {
     # Set up some project variables we won't have running as a curled script
     PACKAGE="RPints-Tools"
-    THISSCRIPT="rpints_install.sh"
+    THISSCRIPT="own_rpints_install.sh"
     VERSION="0.0.0.1"
-    CMDLINE="curl -L https://github.com/rtlindne/RaspberryPints/blob/master/util/installRaspberryPints | sudo bash"
+    CMDLINE="curl -L https://raw.githubusercontent.com/Grooviee/RaspberryPints/master/util/installRaspberryPints | sudo bash"
     SCRIPTNAME="${THISSCRIPT%%.*}"
 }
 
@@ -296,7 +298,7 @@ detectRPintsInstall(){
 instructions() {
     clear
     cat << EOF
-
+Grooviee
 =============================================================================
      -----=====>>>>>     Raspberry Pints Tools     <<<<<=====-----
 =============================================================================
@@ -488,7 +490,7 @@ configurePHPMyAdmin(){
 banner() {
     local adj
     adj="$1"
-    echo -e "\n***Script $THISSCRIPT $adj.***"
+    echo -e "\n***Script Grooviee $THISSCRIPT $adj.***"
 }
 
 ############
@@ -565,28 +567,44 @@ testapache() {
 ############
 
 dbauser() {
-	if ! promptYN "Will this pi host the database" "Y";
-	then
-		PACKAGES=${PACKAGES/mysql-server /}
-		read -e -p "What computer will Host RaspberryPints Database? (default is: localhost): " ANSWER
+    ANSWER = ""
+    read -e -p "Will this pi host the database? (default is: Y): " ANSWER
+    if [ "$ANSWER" = "" ]; then
+        ANSWER="Y"
+    fi
+    if ! echo "$ANSWER" | grep -iq "^y" ; 
+    then
+		#PACKAGES=${PACKAGES/mysql-server /}
+		ANSWER=""
+        read -e -p "What computer will Host RaspberryPints Database? (default is: ${MYSQL_SERVER}): " ANSWER
 		if [ "$ANSWER" != "" ]; then
 		   MYSQL_SERVER=$ANSWER
 		fi
-		read -e -p "MySql Admin User for server ${MYSQL_SERVER}?: " ANSWER
-		MYSQL_USER=$ANSWER
+        ANSWER=""
+		read -e -p "MySql Admin User for server ${MYSQL_SERVER} (default is: ${MYSQL_USER}) ?: " ANSWER
+		if [ "$ANSWER" != "" ]; then
+            MYSQL_USER=$ANSWER
+        fi
 		ANSWER=""
-		read -s -e -p "MySql Admin Password for server ${MYSQL_SERVER}?: " ANSWER
-		MYSQL_PASS=$ANSWER
-		echo
-	else
-		if echo "$VER_NAME" | grep -iq "^jessie" ; 
-		then
-			ANSWER=""
-			read -s -e -p "MySql Admin Password to be used for server ${MYSQL_SERVER}?: " ANSWER
-			MYSQL_PASS=$ANSWER
-			echo
-		fi
-	fi
+		read -s -e -p "MySql Admin Password for server ${MYSQL_SERVER}  (default is: ${MYSQL_PASS})?: " ANSWER
+		if [ "$ANSWER" != "" ]; then
+            MYSQL_PASS=$ANSWER
+        fi
+        ANSWER=""
+        read -s -e -p "MySql port for server ${MYSQL_SERVER} (default is ${MYSQL_PORT}?: " ANSWER
+        if [ "$ANSWER" != "" ]; then
+            MYSQL_PORT=$ANSWER
+        fi 
+		echo		
+    else
+        if echo "$VER_NAME" | grep -iq "^jessie" ; 
+        then
+            ANSWER=""
+            read -s -e -p "MySql Admin Password to be used for server ${MYSQL_SERVER}?: " ANSWER
+            MYSQL_PASS=$ANSWER
+            echo
+        fi
+    fi
 
 	read -e -p "RaspberryPints Database Name? (default is: ${MYSQL_DB_NAME}): " ANSWER
 	if [ "$ANSWER" != "" ]; then
@@ -602,6 +620,7 @@ dbauser() {
 	if [ "$ANSWER" != "" ]; then
 		MYSQL_RP_PASS=$ANSWER
 	fi 
+
 	echo
 	MYSQL_CMD="-h${MYSQL_SERVER}"
 	if [ "${MYSQL_USER}" != "" ]; then 
@@ -610,6 +629,9 @@ dbauser() {
 	if [ "${MYSQL_PASS}" != "" ] ; then 
 		MYSQL_CMD="${MYSQL_CMD} -p${MYSQL_PASS}"
 	fi
+    if [ "${MYSQL_PORT}" != "" ] ; then 
+        MYSQL_CMD="${MYSQL_CMD} --port=${MYSQL_PORT}"
+    fi
 	USER_EXISTS="$(mysql $MYSQL_CMD -sse "SELECT EXISTS(SELECT 1 FROM mysql.user WHERE user = '${MYSQL_RP_USER}')")"
 	if [ $USER_EXISTS = 0 ];
 	then
@@ -636,7 +658,7 @@ outputRPintsConfigs(){
 	then  
 		echo "<?php " >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	function db() {" >> ${INCLUDES_DIRECTORY}/config.php
-		echo "		return new mysqli('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', '${MYSQL_DB_NAME}');" >> ${INCLUDES_DIRECTORY}/config.php
+		echo "		return new mysqli('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', '${MYSQL_DB_NAME}', ${MYSQL_PORT});" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	}" >> ${INCLUDES_DIRECTORY}/config.php
 		echo '	$rpintsversion='"\"2.9.0.1\";" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "?>" >> ${INCLUDES_DIRECTORY}/config.php
@@ -645,7 +667,7 @@ outputRPintsConfigs(){
 	then 
 		echo "<?php " >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	function dbRPintsConnect() {" >> ${INCLUDES_DIRECTORY}/config.php
-		echo "		return mysqli_connect('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', '${MYSQL_DB_NAME}');" >> ${INCLUDES_DIRECTORY}/config.php
+		echo "		return mysqli_connect('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', '${MYSQL_DB_NAME}', ${MYSQL_PORT});" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	}" >> ${INCLUDES_DIRECTORY}/config.php
 		echo '	$rpintsversion='"\"2.1.0.000\";" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "?>" >> ${INCLUDES_DIRECTORY}/config.php
@@ -654,7 +676,7 @@ outputRPintsConfigs(){
 	then 
 		echo "<?php " >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	function db() {" >> ${INCLUDES_DIRECTORY}/config.php
-		echo "		/$link = mysql_connect('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}');" >> ${INCLUDES_DIRECTORY}/config.php
+		echo "		/$link = mysql_connect('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', ${MYSQL_PORT});" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "      mysql_select_db('${MYSQL_DB_NAME}') or die("cannot select DB");" >>  ${INCLUDES_DIRECTORY}/config.php
 		echo "	}" >> ${INCLUDES_DIRECTORY}/config.php
 		echo '	$rpintsversion='"\"1.0.0.279\";" >> ${INCLUDES_DIRECTORY}/config.php
@@ -671,19 +693,20 @@ outputRPintsConfigs(){
 	echo "  \$username=\"${MYSQL_RP_USER}\"; // Mysql username" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	echo "  \$password=\"${MYSQL_RP_PASS}\"; // Mysql password" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	echo "  \$db_name=\"${MYSQL_DB_NAME}\"; // Database name" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
+    echo "  \$port=\"${MYSQL_PORT}\"; // Port name" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	echo "  \$tbl_name=\"users\";" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	echo '	//Connect to server and select database.' >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	if [ ${REPO_CHOICE} -eq 1 ] ;
 	then  
-		echo "	\$mysqli = new mysqli(\"\$host\", \"\$username\", \"\$password\", \"\$db_name\") or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
+		echo "	\$mysqli = new mysqli(\"\$host\", \"\$username\", \"\$password\", \"\$db_name\", $port) or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	fi
 	if [ ${REPO_CHOICE} -eq 2 ] ;
 	then
-		echo "	\$adminLink = mysqli_connect(\"\$host\", \"\$username\", \"\$password\", \"\$db_name\") or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
+		echo "	\$adminLink = mysqli_connect(\"\$host\", \"\$username\", \"\$password\", \"\$db_name\", $port) or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	fi
 	if [ ${REPO_CHOICE} -eq 3 ] ;
 	then
-		echo "	mysql_connect(\"\$host\", \"\$username\", \"\$password\") or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
+		echo "	mysql_connect(\"\$host\", \"\$username\", \"\$password\", $port) or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 		echo "  mysql_select_db('${MYSQL_DB_NAME}') or die("cannot select DB");" >>  ${INCLUDES_DIRECTORY}/config.php
 	fi
 	echo '?>' >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
@@ -702,9 +725,10 @@ outputRPintsConfigs(){
 		echo "  \$username=\"${MYSQL_RP_USER}\"; // Mysql username" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$password=\"${MYSQL_RP_PASS}\"; // Mysql password" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$db_name=\"${MYSQL_DB_NAME}\"; // Database name" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
+        echo "  \$port=\"${MYSQL_PORT}\"; // Port name" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 		echo "  \$tbl_name=\"users\";" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo '	//Connect to server and select database.' >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
-		echo "	\$conn = new PDO(\"mysql:host=\$host;dbname=\$db_name\",\$username,\$password);" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
+		echo "	\$conn = new PDO(\"mysql:host=\$host:$port;dbname=\$db_name\",\$username,\$password);" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$stmt = \$conn->prepare('SELECT * from config WHERE showOnPanel = 1');" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$stmt->execute();" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$result = \$stmt->fetchAll();" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
@@ -714,48 +738,52 @@ outputRPintsConfigs(){
 }
 
 setupDatabase(){
-	mysql ${MYSQL_CMD} -e "DROP DATABASE IF EXISTS $MYSQL_DB_NAME;"
-	mysql ${MYSQL_CMD} -e "CREATE DATABASE $MYSQL_DB_NAME;"
-	
-	echo "Database loading"
-	cat ${WWWPATH}/sql/schema.sql | mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} 
-	echo "Database Successfully loaded"
-	RP_USERNAME=admin
-	RP_PASS=""
-	RP_PASS2="2"
-	RP_NAME_FIRST=""
-	RP_NAME_LAST=""
-	RP_EMAIL=""
-	read -e -p "Admin Username?: " -i ${RP_USERNAME} RP_USERNAME
-	while [ "$RP_PASS" != "$RP_PASS2" ];
-	do
-		read -s -e -p "Admin Password?: " RP_PASS
-		echo
-		read -s -e -p "Re-enter Admin Password?: " RP_PASS2
-		if [ "$RP_PASS" != "$RP_PASS2" ] ; then
-			echo
-			echo "Passwords didnt match, please try again"
-		fi
-	done
-	echo
-	read -e -p "Admin First Name?: " RP_NAME_FIRST
-	read -e -p "Admin Last Name?: " RP_NAME_Last
-	read -e -p "Admin Email?: " RP_EMAIL
-	
-	if ! echo "$REPO" | grep -iq "rtlindne" ; then
-		mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO users 
-							 (username,password,name,email,createdDate,modifiedDate) 
-							 VALUES ('${RP_USERNAME}',MD5('${RP_PASS}'),CONCAT('${RP_NAME_FIRST}', ' ', '${RP_NAME_LAST}'),'${RP_EMAIL}',NOW(),NOW());";
-	else
-		mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO users 
-						 (username,password,nameFirst,nameLast,mugId,email,unTapAccessToken,isAdmin,active,createdDate,modifiedDate) 
-							 VALUES ('${RP_USERNAME}',MD5('${RP_PASS}'),'${RP_NAME_FIRST}','${RP_NAME_LAST}',NULL,'${RP_EMAIL}',NULL,1,1,NOW(),NOW());";
+    DB_EXISTS="$(mysql $MYSQL_CMD -sse "SHOW DATABASES LIKE '${MYSQL_DB_NAME}'")"
+    if [ $DB_EXISTS = 0 ];
+    then
+	   mysql ${MYSQL_CMD} -e "DROP DATABASE IF EXISTS $MYSQL_DB_NAME;"
+	   mysql ${MYSQL_CMD} -e "CREATE DATABASE $MYSQL_DB_NAME;"
+    	
+    	echo "Database loading"
+    	cat ${WWWPATH}/sql/schema.sql | mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} 
+    	echo "Database Successfully loaded"
+    	RP_USERNAME=admin
+    	RP_PASS=""
+    	RP_PASS2="2"
+    	RP_NAME_FIRST=""
+    	RP_NAME_LAST=""
+    	RP_EMAIL=""
+    	read -e -p "Admin Username?: " -i ${RP_USERNAME} RP_USERNAME
+    	while [ "$RP_PASS" != "$RP_PASS2" ];
+    	do
+    		read -s -e -p "Admin Password?: " RP_PASS
+    		echo
+    		read -s -e -p "Re-enter Admin Password?: " RP_PASS2
+    		if [ "$RP_PASS" != "$RP_PASS2" ] ; then
+    			echo
+    			echo "Passwords didnt match, please try again"
+    		fi
+    	done
+    	echo
+    	read -e -p "Admin First Name?: " RP_NAME_FIRST
+    	read -e -p "Admin Last Name?: " RP_NAME_Last
+    	read -e -p "Admin Email?: " RP_EMAIL
+    	
+    	if ! echo "$REPO" | grep -iq "rtlindne" ; then
+    		mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO users 
+    							 (username,password,name,email,createdDate,modifiedDate) 
+    							 VALUES ('${RP_USERNAME}',MD5('${RP_PASS}'),CONCAT('${RP_NAME_FIRST}', ' ', '${RP_NAME_LAST}'),'${RP_EMAIL}',NOW(),NOW());";
+    	else
+    		mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO users 
+    						 (username,password,nameFirst,nameLast,mugId,email,unTapAccessToken,isAdmin,active,createdDate,modifiedDate) 
+    							 VALUES ('${RP_USERNAME}',MD5('${RP_PASS}'),'${RP_NAME_FIRST}','${RP_NAME_LAST}',NULL,'${RP_EMAIL}',NULL,1,1,NOW(),NOW());";
+    	fi
+
+    	mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO config ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+    												( 'repo', '${REPO_CHOICE}', 'The Repo Option from install', '0', NOW(), NOW() );";
+    	
 	fi
 
-	mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO config ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
-												( 'repo', '${REPO_CHOICE}', 'The Repo Option from install', '0', NOW(), NOW() );";
-	
-	
 	if [ -f "${WWWPATH}/index.html" ]; then
 		rm ${WWWPATH}/index.html
 	fi
@@ -776,7 +804,7 @@ doarchive() {
 	
     local archname retval
     
-	REPO_OPTIONS=(1 "RandR+"
+	REPO_OPTIONS=(1 "Grooviee(fork of RandR+)"
 		 2 "Tobor"
          3 "Original (May not work After Raspbian Jessie)")
 	REPO_CHOICE=$(dialog --clear \
@@ -1238,6 +1266,7 @@ getExistingSystemVariables(){
 	MYSQL_RP_USER=$(grep -oE '\$username=.*;' ${WWWPATH}/admin/includes/conn.php | tail -1 | sed 's/$username="//g;s/";//g')
 	MYSQL_RP_PASS=$(grep -oE '\$password=.*;' ${WWWPATH}/admin/includes/conn.php | tail -1 | sed 's/$password="//g;s/";//g')
 	MYSQL_DB_NAME=$(grep -oE '\$db_name=.*;' ${WWWPATH}/admin/includes/conn.php | tail -1 | sed 's/$db_name="//g;s/";//g')
+    MYSQL_PORT=$(grep -oE '\$db_port=.*;' ${WWWPATH}/admin/includes/conn.php | tail -1 | sed 's/$db_port="//g;s/";//g')
 	
 	MYSQL_CMD="-h${MYSQL_SERVER}"
 	if [ "${MYSQL_USER}" != "" ]; then 
@@ -1246,6 +1275,9 @@ getExistingSystemVariables(){
 	if [ "${MYSQL_PASS}" != "" ] ; then 
 		MYSQL_CMD="${MYSQL_CMD} -p${MYSQL_PASS}"
 	fi
+    if [ "${MYSQL_PORT}" != "" ] ; then 
+        MYSQL_CMD="${MYSQL_CMD} --port=${MYSQL_PORT}"
+    fi
 	
 	REPO_CHOICE=$(mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -sse "SELECT configValue FROM config WHERE configName='repo'")
 	if [ -z $REPO_CHOICE ]; then
