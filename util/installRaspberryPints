@@ -567,7 +567,12 @@ testapache() {
 ############
 
 dbauser() {
-	if promptYN "Will this pi host the database" "Y"; then
+	if promptYN "Will this pi host the database" "Y" ; then
+        echo "Test"
+    else 
+        echo "Test 2"
+    fi
+    if promptYN "Will this pi host the database" "Y" ; then
         if echo "$VER_NAME" | grep -iq "^jessie" ; 
         then
             ANSWER=""
@@ -576,7 +581,6 @@ dbauser() {
             echo
         fi
     else
-
 		#PACKAGES=${PACKAGES/mysql-server /}
 		ANSWER=""
         read -e -p "What computer will Host RaspberryPints Database? (default is: ${MYSQL_SERVER}): " ANSWER
