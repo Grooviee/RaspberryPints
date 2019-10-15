@@ -1260,6 +1260,9 @@ getExistingSystemVariables(){
 	if [ "${MYSQL_PASS}" != "" ] ; then 
 		MYSQL_CMD="${MYSQL_CMD} -p${MYSQL_PASS}"
 	fi
+    if [ "${MYSQL_PORT}" != "" ] ; then 
+        MYSQL_CMD="${MYSQL_CMD} --port=${MYSQL_PORT}"
+    fi
 	
 	REPO_CHOICE=$(mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -sse "SELECT configValue FROM config WHERE configName='repo'")
 	if [ -z $REPO_CHOICE ]; then
