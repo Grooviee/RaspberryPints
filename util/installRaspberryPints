@@ -490,7 +490,7 @@ configurePHPMyAdmin(){
 banner() {
     local adj
     adj="$1"
-    echo -e "\n***Script $THISSCRIPT $adj.***"
+    echo -e "\n***Script Grooviee $THISSCRIPT $adj.***"
 }
 
 ############
