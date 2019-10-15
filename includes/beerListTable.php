@@ -19,7 +19,7 @@
 			
 			<?php if($config[ConfigNames::ShowSrmCol]){ ?>
 				<th class="srm">
-					COLOR
+					KLEUR
 				</th>
 			<?php } ?>
 			
@@ -41,7 +41,7 @@
 				<th <?php if($beerColSpan > 1){ echo 'colspan="'.$beerColSpan.'"';}?> class="beername">
 					<?php if($config[ConfigNames::ShowBeerName]){ ?>
 						BEER NAME 
-						<?php if($config[ConfigNames::ShowBeerStyle]){ ?>&nbsp; &nbsp; STYLE<hr><?php } ?>
+						<?php if($config[ConfigNames::ShowBeerStyle]){ ?>&nbsp; &nbsp; STIJL<hr><?php } ?>
 						<?php if($config[ConfigNames::ShowBeerNotes]){ ?>&nbsp; &nbsp; TASTING NOTES<?php } ?>
 						<?php if($config[ConfigNames::ShowBeerRating]){?>&nbsp; &nbsp; RATING<hr><?php } ?>
 					<?php } ?>
@@ -137,10 +137,17 @@
 						</h3>
 						<?php } ?>
 						
-						<?php if($beer['ibu'] != ''){ ?>
-    						<div class="ibu-container">
+						<?php if($beer['ibu'] != ''){ 
+                            $ibOg = round(($beer['ibu'])/(($sgOg-1)*1000), 2) * 100;
+                        ?>
+                            <div class="ibu-container">
+                                <div class="ibu-indicator"><div class="ibu-full" style="height:<?php echo $ibOg > 100 ? 100 : $ibOg; ?>%"></div></div>
+                            </div>
+    						<!-- 
+                            <div class="ibu-container">
     							<div class="ibu-indicator"><div class="ibu-full" style="height:<?php echo $beer['ibu'] > 100 ? 100 : $beer['ibu']; ?>%"></div></div>
     						</div>
+                            -->
     						<h2><?php echo $beer['ibu']; ?> IBU</h2>
 						<?php }else{ echo "<h2>N/A</h2>"; } ?>
 					<?php } ?>
