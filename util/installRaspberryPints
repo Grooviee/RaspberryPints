@@ -80,7 +80,7 @@ init() {
     PACKAGE="RPints-Tools"
     THISSCRIPT="rpints_install.sh"
     VERSION="0.0.0.1"
-    CMDLINE="curl -L https://github.com/Grooviee/RaspberryPints/blob/master/util/installRaspberryPints | sudo bash"
+    CMDLINE="curl -L https://raw.githubusercontent.com/Grooviee/RaspberryPints/master/util/installRaspberryPints | sudo bash"
     SCRIPTNAME="${THISSCRIPT%%.*}"
 }
 
