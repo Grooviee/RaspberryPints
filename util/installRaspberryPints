@@ -567,20 +567,13 @@ testapache() {
 ############
 
 dbauser() {
-	if promptYN "Will this pi host the database" "Y" ; then
-        echo "Test"
-    else 
-        echo "Test 2"
+    ANSWER = ""
+    read -e -p "Will this pi host the database? (default is: Y): " ANSWER
+    if [ "$ANSWER" = "" ]; then
+        ANSWER="Y"
     fi
-    if promptYN "Will this pi host the database" "Y" ; then
-        if echo "$VER_NAME" | grep -iq "^jessie" ; 
-        then
-            ANSWER=""
-            read -s -e -p "MySql Admin Password to be used for server ${MYSQL_SERVER}?: " ANSWER
-            MYSQL_PASS=$ANSWER
-            echo
-        fi
-    else
+    if ! echo "$ANSWER" | grep -iq "^y" ; 
+    then
 		#PACKAGES=${PACKAGES/mysql-server /}
 		ANSWER=""
         read -e -p "What computer will Host RaspberryPints Database? (default is: ${MYSQL_SERVER}): " ANSWER
@@ -603,7 +596,15 @@ dbauser() {
             MYSQL_PORT=$ANSWER
         fi 
 		echo		
-	fi
+    else
+        if echo "$VER_NAME" | grep -iq "^jessie" ; 
+        then
+            ANSWER=""
+            read -s -e -p "MySql Admin Password to be used for server ${MYSQL_SERVER}?: " ANSWER
+            MYSQL_PASS=$ANSWER
+            echo
+        fi
+    fi
 
 	read -e -p "RaspberryPints Database Name? (default is: ${MYSQL_DB_NAME}): " ANSWER
 	if [ "$ANSWER" != "" ]; then
