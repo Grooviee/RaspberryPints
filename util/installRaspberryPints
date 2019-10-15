@@ -65,8 +65,10 @@ MYSQL_SERVER="192.168.1.50"
 MYSQL_DB_NAME="RaspberryPints"
 MYSQL_USER=""
 MYSQL_PASS=""
+MYSQL_PORT="3306"
 MYSQL_RP_USER="RaspberryPints"
 MYSQL_RP_PASS="RaspberryPints"
+
 
 USE_FLOW_METERS=N
 USE_RFID=N
@@ -602,6 +604,11 @@ dbauser() {
 	if [ "$ANSWER" != "" ]; then
 		MYSQL_RP_PASS=$ANSWER
 	fi 
+    read -s -e -p "RaspberryPints Database Port? (default is: ${MYSQL_PORT}): " ANSWER
+    if [ "$ANSWER" != "" ]; then
+        MYSQL_PORT=$ANSWER
+    fi 
+
 	echo
 	MYSQL_CMD="-h${MYSQL_SERVER}"
 	if [ "${MYSQL_USER}" != "" ]; then 
@@ -610,6 +617,9 @@ dbauser() {
 	if [ "${MYSQL_PASS}" != "" ] ; then 
 		MYSQL_CMD="${MYSQL_CMD} -p${MYSQL_PASS}"
 	fi
+    if [ "${MYSQL_PORT}" != "" ] ; then 
+        MYSQL_CMD="${MYSQL_CMD} --port=${MYSQL_PORT}"
+    fi
 	USER_EXISTS="$(mysql $MYSQL_CMD -sse "SELECT EXISTS(SELECT 1 FROM mysql.user WHERE user = '${MYSQL_RP_USER}')")"
 	if [ $USER_EXISTS = 0 ];
 	then
@@ -714,48 +724,52 @@ outputRPintsConfigs(){
 }
 
 setupDatabase(){
-	mysql ${MYSQL_CMD} -e "DROP DATABASE IF EXISTS $MYSQL_DB_NAME;"
-	mysql ${MYSQL_CMD} -e "CREATE DATABASE $MYSQL_DB_NAME;"
-	
-	echo "Database loading"
-	cat ${WWWPATH}/sql/schema.sql | mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} 
-	echo "Database Successfully loaded"
-	RP_USERNAME=admin
-	RP_PASS=""
-	RP_PASS2="2"
-	RP_NAME_FIRST=""
-	RP_NAME_LAST=""
-	RP_EMAIL=""
-	read -e -p "Admin Username?: " -i ${RP_USERNAME} RP_USERNAME
-	while [ "$RP_PASS" != "$RP_PASS2" ];
-	do
-		read -s -e -p "Admin Password?: " RP_PASS
-		echo
-		read -s -e -p "Re-enter Admin Password?: " RP_PASS2
-		if [ "$RP_PASS" != "$RP_PASS2" ] ; then
-			echo
-			echo "Passwords didnt match, please try again"
-		fi
-	done
-	echo
-	read -e -p "Admin First Name?: " RP_NAME_FIRST
-	read -e -p "Admin Last Name?: " RP_NAME_Last
-	read -e -p "Admin Email?: " RP_EMAIL
-	
-	if ! echo "$REPO" | grep -iq "rtlindne" ; then
-		mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO users 
-							 (username,password,name,email,createdDate,modifiedDate) 
-							 VALUES ('${RP_USERNAME}',MD5('${RP_PASS}'),CONCAT('${RP_NAME_FIRST}', ' ', '${RP_NAME_LAST}'),'${RP_EMAIL}',NOW(),NOW());";
-	else
-		mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO users 
-						 (username,password,nameFirst,nameLast,mugId,email,unTapAccessToken,isAdmin,active,createdDate,modifiedDate) 
-							 VALUES ('${RP_USERNAME}',MD5('${RP_PASS}'),'${RP_NAME_FIRST}','${RP_NAME_LAST}',NULL,'${RP_EMAIL}',NULL,1,1,NOW(),NOW());";
+    DB_EXISTS="$(mysql $MYSQL_CMD -sse "SHOW DATABASES LIKE '${MYSQL_DB_NAME}'")"
+    if [ $DB_EXISTS = 0 ];
+    then
+	   mysql ${MYSQL_CMD} -e "DROP DATABASE IF EXISTS $MYSQL_DB_NAME;"
+	   mysql ${MYSQL_CMD} -e "CREATE DATABASE $MYSQL_DB_NAME;"
+    	
+    	echo "Database loading"
+    	cat ${WWWPATH}/sql/schema.sql | mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} 
+    	echo "Database Successfully loaded"
+    	RP_USERNAME=admin
+    	RP_PASS=""
+    	RP_PASS2="2"
+    	RP_NAME_FIRST=""
+    	RP_NAME_LAST=""
+    	RP_EMAIL=""
+    	read -e -p "Admin Username?: " -i ${RP_USERNAME} RP_USERNAME
+    	while [ "$RP_PASS" != "$RP_PASS2" ];
+    	do
+    		read -s -e -p "Admin Password?: " RP_PASS
+    		echo
+    		read -s -e -p "Re-enter Admin Password?: " RP_PASS2
+    		if [ "$RP_PASS" != "$RP_PASS2" ] ; then
+    			echo
+    			echo "Passwords didnt match, please try again"
+    		fi
+    	done
+    	echo
+    	read -e -p "Admin First Name?: " RP_NAME_FIRST
+    	read -e -p "Admin Last Name?: " RP_NAME_Last
+    	read -e -p "Admin Email?: " RP_EMAIL
+    	
+    	if ! echo "$REPO" | grep -iq "rtlindne" ; then
+    		mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO users 
+    							 (username,password,name,email,createdDate,modifiedDate) 
+    							 VALUES ('${RP_USERNAME}',MD5('${RP_PASS}'),CONCAT('${RP_NAME_FIRST}', ' ', '${RP_NAME_LAST}'),'${RP_EMAIL}',NOW(),NOW());";
+    	else
+    		mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO users 
+    						 (username,password,nameFirst,nameLast,mugId,email,unTapAccessToken,isAdmin,active,createdDate,modifiedDate) 
+    							 VALUES ('${RP_USERNAME}',MD5('${RP_PASS}'),'${RP_NAME_FIRST}','${RP_NAME_LAST}',NULL,'${RP_EMAIL}',NULL,1,1,NOW(),NOW());";
+    	fi
+
+    	mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO config ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+    												( 'repo', '${REPO_CHOICE}', 'The Repo Option from install', '0', NOW(), NOW() );";
+    	
 	fi
 
-	mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO config ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
-												( 'repo', '${REPO_CHOICE}', 'The Repo Option from install', '0', NOW(), NOW() );";
-	
-	
 	if [ -f "${WWWPATH}/index.html" ]; then
 		rm ${WWWPATH}/index.html
 	fi
@@ -776,7 +790,7 @@ doarchive() {
 	
     local archname retval
     
-	REPO_OPTIONS=(1 "RandR+"
+	REPO_OPTIONS=(1 "Grooviee(fork of RandR+)"
 		 2 "Tobor"
          3 "Original (May not work After Raspbian Jessie)")
 	REPO_CHOICE=$(dialog --clear \
