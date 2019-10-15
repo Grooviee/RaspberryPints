@@ -576,8 +576,10 @@ dbauser() {
             echo
         fi
     else
+
 		#PACKAGES=${PACKAGES/mysql-server /}
-		read -e -p "What computer will Host RaspberryPints Database? (default is: ${MYSQL_SERVER}): " ANSWER
+		ANSWER=""
+        read -e -p "What computer will Host RaspberryPints Database? (default is: ${MYSQL_SERVER}): " ANSWER
 		if [ "$ANSWER" != "" ]; then
 		   MYSQL_SERVER=$ANSWER
 		fi
@@ -651,7 +653,7 @@ outputRPintsConfigs(){
 	then  
 		echo "<?php " >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	function db() {" >> ${INCLUDES_DIRECTORY}/config.php
-		echo "		return new mysqli('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', '${MYSQL_DB_NAME}');" >> ${INCLUDES_DIRECTORY}/config.php
+		echo "		return new mysqli('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', '${MYSQL_DB_NAME}', ${MYSQL_PORT});" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	}" >> ${INCLUDES_DIRECTORY}/config.php
 		echo '	$rpintsversion='"\"2.9.0.1\";" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "?>" >> ${INCLUDES_DIRECTORY}/config.php
@@ -660,7 +662,7 @@ outputRPintsConfigs(){
 	then 
 		echo "<?php " >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	function dbRPintsConnect() {" >> ${INCLUDES_DIRECTORY}/config.php
-		echo "		return mysqli_connect('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', '${MYSQL_DB_NAME}');" >> ${INCLUDES_DIRECTORY}/config.php
+		echo "		return mysqli_connect('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', '${MYSQL_DB_NAME}', ${MYSQL_PORT});" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	}" >> ${INCLUDES_DIRECTORY}/config.php
 		echo '	$rpintsversion='"\"2.1.0.000\";" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "?>" >> ${INCLUDES_DIRECTORY}/config.php
@@ -669,7 +671,7 @@ outputRPintsConfigs(){
 	then 
 		echo "<?php " >> ${INCLUDES_DIRECTORY}/config.php
 		echo "	function db() {" >> ${INCLUDES_DIRECTORY}/config.php
-		echo "		/$link = mysql_connect('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}');" >> ${INCLUDES_DIRECTORY}/config.php
+		echo "		/$link = mysql_connect('${MYSQL_SERVER}', '${MYSQL_RP_USER}', '${MYSQL_RP_PASS}', ${MYSQL_PORT});" >> ${INCLUDES_DIRECTORY}/config.php
 		echo "      mysql_select_db('${MYSQL_DB_NAME}') or die("cannot select DB");" >>  ${INCLUDES_DIRECTORY}/config.php
 		echo "	}" >> ${INCLUDES_DIRECTORY}/config.php
 		echo '	$rpintsversion='"\"1.0.0.279\";" >> ${INCLUDES_DIRECTORY}/config.php
@@ -686,19 +688,20 @@ outputRPintsConfigs(){
 	echo "  \$username=\"${MYSQL_RP_USER}\"; // Mysql username" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	echo "  \$password=\"${MYSQL_RP_PASS}\"; // Mysql password" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	echo "  \$db_name=\"${MYSQL_DB_NAME}\"; // Database name" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
+    echo "  \$port=\"${MYSQL_PORT}\"; // Port name" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	echo "  \$tbl_name=\"users\";" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	echo '	//Connect to server and select database.' >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	if [ ${REPO_CHOICE} -eq 1 ] ;
 	then  
-		echo "	\$mysqli = new mysqli(\"\$host\", \"\$username\", \"\$password\", \"\$db_name\") or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
+		echo "	\$mysqli = new mysqli(\"\$host\", \"\$username\", \"\$password\", \"\$db_name\", $port) or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	fi
 	if [ ${REPO_CHOICE} -eq 2 ] ;
 	then
-		echo "	\$adminLink = mysqli_connect(\"\$host\", \"\$username\", \"\$password\", \"\$db_name\") or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
+		echo "	\$adminLink = mysqli_connect(\"\$host\", \"\$username\", \"\$password\", \"\$db_name\", $port) or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 	fi
 	if [ ${REPO_CHOICE} -eq 3 ] ;
 	then
-		echo "	mysql_connect(\"\$host\", \"\$username\", \"\$password\") or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
+		echo "	mysql_connect(\"\$host\", \"\$username\", \"\$password\", $port) or die(\"cannot connect to server\");" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 		echo "  mysql_select_db('${MYSQL_DB_NAME}') or die("cannot select DB");" >>  ${INCLUDES_DIRECTORY}/config.php
 	fi
 	echo '?>' >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
@@ -717,9 +720,10 @@ outputRPintsConfigs(){
 		echo "  \$username=\"${MYSQL_RP_USER}\"; // Mysql username" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$password=\"${MYSQL_RP_PASS}\"; // Mysql password" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$db_name=\"${MYSQL_DB_NAME}\"; // Database name" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
+        echo "  \$port=\"${MYSQL_PORT}\"; // Port name" >> ${ADMIN_INCLUDES_DIRECTORY}/conn.php
 		echo "  \$tbl_name=\"users\";" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo '	//Connect to server and select database.' >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
-		echo "	\$conn = new PDO(\"mysql:host=\$host;dbname=\$db_name\",\$username,\$password);" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
+		echo "	\$conn = new PDO(\"mysql:host=\$host:$port;dbname=\$db_name\",\$username,\$password);" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$stmt = \$conn->prepare('SELECT * from config WHERE showOnPanel = 1');" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$stmt->execute();" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
 		echo "  \$result = \$stmt->fetchAll();" >> ${ADMIN_INCLUDES_DIRECTORY}/configp.php
