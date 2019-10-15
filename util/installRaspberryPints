@@ -35,7 +35,7 @@ FLOW_MEATERS_PACKAGES="arduino python-serial python-mysqldb php-cli
 
 # the base github repo name
 DEFAULT_REPO=https://github.com/RaspberryPints/RaspberryPints.git  
-CUSTOM_REPO=https://github.com/rtlindne/RaspberryPints.git  
+CUSTOM_REPO=https://github.com/Grooviee/RaspberryPints.git  
 FLOW_METERS_REPO=https://github.com/wyolum/alamode/raw/master/bundles/alamode-setup.tar.gz
 FLOW_METERS_STRETCH_REPO=https://github.com/wyolum/alamode/raw/master/alamode-setup/stretch-setup
 
@@ -61,8 +61,8 @@ GLOBAL_CONFIG_FILE=/etc/xdg/lxsession/LXDE-pi/autostart
 MODULE_CONFIG_FILE=/etc/modules
 BLACKLIST_CONFIG_FILE=/etc/modprobe.d/raspi-blacklist.conf
 
-MYSQL_SERVER="localhost"
-MYSQL_DB_NAME="raspberrypints"
+MYSQL_SERVER="192.168.1.50"
+MYSQL_DB_NAME="RaspberryPints"
 MYSQL_USER=""
 MYSQL_PASS=""
 MYSQL_RP_USER="RaspberryPints"
@@ -80,7 +80,7 @@ init() {
     PACKAGE="RPints-Tools"
     THISSCRIPT="rpints_install.sh"
     VERSION="0.0.0.1"
-    CMDLINE="curl -L https://github.com/rtlindne/RaspberryPints/blob/master/util/installRaspberryPints | sudo bash"
+    CMDLINE="curl -L https://github.com/Grooviee/RaspberryPints/blob/master/util/installRaspberryPints | sudo bash"
     SCRIPTNAME="${THISSCRIPT%%.*}"
 }
 
