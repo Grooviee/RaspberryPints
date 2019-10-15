@@ -567,8 +567,16 @@ testapache() {
 ############
 
 dbauser() {
-	if ! promptYN "Will this pi host the database" "Y";
-	then
+	if promptYN "Will this pi host the database" "Y";
+    then
+        if echo "$VER_NAME" | grep -iq "^jessie" ; 
+        then
+            ANSWER=""
+            read -s -e -p "MySql Admin Password to be used for server ${MYSQL_SERVER}?: " ANSWER
+            MYSQL_PASS=$ANSWER
+            echo
+        fi
+    else
 		#PACKAGES=${PACKAGES/mysql-server /}
 		read -e -p "What computer will Host RaspberryPints Database? (default is: localhost): " ANSWER
 		if [ "$ANSWER" != "" ]; then
@@ -583,15 +591,7 @@ dbauser() {
         if [ "$ANSWER" != "" ]; then
             MYSQL_PORT=$ANSWER
         fi 
-		echo
-	else
-		if echo "$VER_NAME" | grep -iq "^jessie" ; 
-		then
-			ANSWER=""
-			read -s -e -p "MySql Admin Password to be used for server ${MYSQL_SERVER}?: " ANSWER
-			MYSQL_PASS=$ANSWER
-			echo
-		fi
+		echo		
 	fi
 
 	read -e -p "RaspberryPints Database Name? (default is: ${MYSQL_DB_NAME}): " ANSWER
@@ -1256,6 +1256,7 @@ getExistingSystemVariables(){
 	MYSQL_RP_USER=$(grep -oE '\$username=.*;' ${WWWPATH}/admin/includes/conn.php | tail -1 | sed 's/$username="//g;s/";//g')
 	MYSQL_RP_PASS=$(grep -oE '\$password=.*;' ${WWWPATH}/admin/includes/conn.php | tail -1 | sed 's/$password="//g;s/";//g')
 	MYSQL_DB_NAME=$(grep -oE '\$db_name=.*;' ${WWWPATH}/admin/includes/conn.php | tail -1 | sed 's/$db_name="//g;s/";//g')
+    MYSQL_PORT=$(grep -oE '\$db_port=.*;' ${WWWPATH}/admin/includes/conn.php | tail -1 | sed 's/$db_port="//g;s/";//g')
 	
 	MYSQL_CMD="-h${MYSQL_SERVER}"
 	if [ "${MYSQL_USER}" != "" ]; then 
