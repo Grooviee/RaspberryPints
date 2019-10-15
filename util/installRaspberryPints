@@ -567,8 +567,7 @@ testapache() {
 ############
 
 dbauser() {
-	if promptYN "Will this pi host the database" "Y";
-    then
+	if promptYN "Will this pi host the database" "Y"; then
         if echo "$VER_NAME" | grep -iq "^jessie" ; 
         then
             ANSWER=""
@@ -578,15 +577,21 @@ dbauser() {
         fi
     else
 		#PACKAGES=${PACKAGES/mysql-server /}
-		read -e -p "What computer will Host RaspberryPints Database? (default is: localhost): " ANSWER
+		read -e -p "What computer will Host RaspberryPints Database? (default is: ${MYSQL_SERVER}): " ANSWER
 		if [ "$ANSWER" != "" ]; then
 		   MYSQL_SERVER=$ANSWER
 		fi
-		read -e -p "MySql Admin User for server ${MYSQL_SERVER}?: " ANSWER
-		MYSQL_USER=$ANSWER
+        ANSWER=""
+		read -e -p "MySql Admin User for server ${MYSQL_SERVER} (default is: ${MYSQL_USER}) ?: " ANSWER
+		if [ "$ANSWER" != "" ]; then
+            MYSQL_USER=$ANSWER
+        fi
 		ANSWER=""
-		read -s -e -p "MySql Admin Password for server ${MYSQL_SERVER}?: " ANSWER
-		MYSQL_PASS=$ANSWER
+		read -s -e -p "MySql Admin Password for server ${MYSQL_SERVER}  (default is: ${MYSQL_PASS})?: " ANSWER
+		if [ "$ANSWER" != "" ]; then
+            MYSQL_PASS=$ANSWER
+        fi
+        ANSWER=""
         read -s -e -p "MySql port for server ${MYSQL_SERVER} (default is ${MYSQL_PORT}?: " ANSWER
         if [ "$ANSWER" != "" ]; then
             MYSQL_PORT=$ANSWER
@@ -608,10 +613,6 @@ dbauser() {
 	if [ "$ANSWER" != "" ]; then
 		MYSQL_RP_PASS=$ANSWER
 	fi 
-    read -s -e -p "RaspberryPints Database Port? (default is: ${MYSQL_PORT}): " ANSWER
-    if [ "$ANSWER" != "" ]; then
-        MYSQL_PORT=$ANSWER
-    fi 
 
 	echo
 	MYSQL_CMD="-h${MYSQL_SERVER}"
