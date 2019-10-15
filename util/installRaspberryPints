@@ -63,8 +63,8 @@ BLACKLIST_CONFIG_FILE=/etc/modprobe.d/raspi-blacklist.conf
 
 MYSQL_SERVER="192.168.1.50"
 MYSQL_DB_NAME="RaspberryPints"
-MYSQL_USER=""
-MYSQL_PASS=""
+MYSQL_USER="RaspberryPints"
+MYSQL_PASS="RaspberryPints"
 MYSQL_PORT="3307"
 MYSQL_RP_USER="RaspberryPints"
 MYSQL_RP_PASS="RaspberryPints"
@@ -569,7 +569,7 @@ testapache() {
 dbauser() {
 	if ! promptYN "Will this pi host the database" "Y";
 	then
-		PACKAGES=${PACKAGES/mysql-server /}
+		#PACKAGES=${PACKAGES/mysql-server /}
 		read -e -p "What computer will Host RaspberryPints Database? (default is: localhost): " ANSWER
 		if [ "$ANSWER" != "" ]; then
 		   MYSQL_SERVER=$ANSWER
@@ -579,6 +579,10 @@ dbauser() {
 		ANSWER=""
 		read -s -e -p "MySql Admin Password for server ${MYSQL_SERVER}?: " ANSWER
 		MYSQL_PASS=$ANSWER
+        read -s -e -p "MySql port for server ${MYSQL_SERVER} (default is ${MYSQL_PORT}?: " ANSWER
+        if [ "$ANSWER" != "" ]; then
+            MYSQL_PORT=$ANSWER
+        fi 
 		echo
 	else
 		if echo "$VER_NAME" | grep -iq "^jessie" ; 
