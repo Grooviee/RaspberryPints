@@ -567,35 +567,33 @@ testapache() {
 ############
 
 dbauser() {
-    ANSWER = ""
     read -e -p "Will this pi host the database? (default is: Y): " ANSWER
-    if [ "$ANSWER" = "" ]; then
+    if [ "$ANSWER" == "" ]; then
         ANSWER="Y"
     fi
     if ! echo "$ANSWER" | grep -iq "^y" ; 
     then
 		#PACKAGES=${PACKAGES/mysql-server /}
-		ANSWER=""
+	ANSWER=""
         read -e -p "What computer will Host RaspberryPints Database? (default is: ${MYSQL_SERVER}): " ANSWER
-		if [ "$ANSWER" != "" ]; then
-		   MYSQL_SERVER=$ANSWER
-		fi
+	if [ "$ANSWER" != "" ]; then
+	   MYSQL_SERVER=$ANSWER
+	fi
         ANSWER=""
-		read -e -p "MySql Admin User for server ${MYSQL_SERVER} (default is: ${MYSQL_USER}) ?: " ANSWER
-		if [ "$ANSWER" != "" ]; then
+	read -e -p "MySql Admin User for server ${MYSQL_SERVER} (default is: ${MYSQL_USER}) ?: " ANSWER
+	if [ "$ANSWER" != "" ]; then
             MYSQL_USER=$ANSWER
         fi
-		ANSWER=""
-		read -s -e -p "MySql Admin Password for server ${MYSQL_SERVER}  (default is: ${MYSQL_PASS})?: " ANSWER
-		if [ "$ANSWER" != "" ]; then
+	ANSWER=""
+	read -s -e -p "MySql Admin Password for server ${MYSQL_SERVER}  (default is: ${MYSQL_PASS})?: " ANSWER
+	if [ "$ANSWER" != "" ]; then
             MYSQL_PASS=$ANSWER
         fi
         ANSWER=""
-        read -s -e -p "MySql port for server ${MYSQL_SERVER} (default is ${MYSQL_PORT}?: " ANSWER
+        read -e -p "MySql port for server ${MYSQL_SERVER} (default is ${MYSQL_PORT})?: " ANSWER
         if [ "$ANSWER" != "" ]; then
             MYSQL_PORT=$ANSWER
-        fi 
-		echo		
+        fi
     else
         if echo "$VER_NAME" | grep -iq "^jessie" ; 
         then
@@ -633,7 +631,7 @@ dbauser() {
         MYSQL_CMD="${MYSQL_CMD} --port=${MYSQL_PORT}"
     fi
 	USER_EXISTS="$(mysql $MYSQL_CMD -sse "SELECT EXISTS(SELECT 1 FROM mysql.user WHERE user = '${MYSQL_RP_USER}')")"
-	if [ $USER_EXISTS = 0 ];
+	if [ $USER_EXISTS == 0 ];
 	then
 		mysql ${MYSQL_CMD} -e "CREATE USER ${MYSQL_RP_USER}@'%' IDENTIFIED BY '${MYSQL_RP_PASS}';"
 	else
@@ -781,7 +779,10 @@ setupDatabase(){
 
     	mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO config ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
     												( 'repo', '${REPO_CHOICE}', 'The Repo Option from install', '0', NOW(), NOW() );";
+<<<<<<< HEAD
     	
+=======
+>>>>>>> 971ff1b2ee941c67f4b6cc56bf2dd8697e72d310
 	fi
 
 	if [ -f "${WWWPATH}/index.html" ]; then
