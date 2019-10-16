@@ -1096,94 +1096,97 @@ installTempProbes(){
 }
 
 configureMonitor(){
-	MONITOR=true
-	MONITOR_OPTIONS=(1 "No Monitor"
-			 2 "1920 x 1080 | 1080p"
-	         3 "1280 x 720  | 720p"
-	         4 "1600 x 1200"
-	         5 "1680 x 1050"
-	         6 "1920 x 1200")
-	HDMI_GROUP=1
-	HDMI_MODE=16
-	MONITOR_RESOLUTION=$(dialog --clear \
-	                --backtitle "Monitor" \
-	                --title "Monitor Options" \
-	                --menu "Choose your Monitor Size" \
-	                20 40 6 \
-	                "${MONITOR_OPTIONS[@]}" \
-	                2>&1 >/dev/tty);
-	clear
-	case $MONITOR_RESOLUTION in
-			2)
-				HDMI_GROUP=1
-				HDMI_MODE=16
-				;;
-			3)
-				HDMI_GROUP=1
-				HDMI_MODE=4
-				;;
-			4)
-				HDMI_GROUP=1
-				HDMI_MODE=2
-				;;
-			5)
-				HDMI_GROUP=2
-				HDMI_MODE=51
-				;;
-			6)
-				HDMI_GROUP=2
-				HDMI_MODE=68
-				;;
-			*) 
-				MONITOR=false
-			    ;;
-	esac
-	if $MONITOR = true ; then		
-	
-		if [ -f $BOOT_CONFIG_FILE ]; then
-			sed -i -E 's/^\s*(hdmi_group.*)/#\1/g' $BOOT_CONFIG_FILE
-			sed -i -E 's/^\s*(hdmi_mode.*)/#\1/g' $BOOT_CONFIG_FILE
-		fi
-		echo "hdmi_group=$HDMI_GROUP" >> $BOOT_CONFIG_FILE
-		echo "hdmi_mode=$HDMI_MODE" >> $BOOT_CONFIG_FILE
-		MONITOR_OPTIONS=(1 "No Rotation"
-			 2 "90 Degrees Clockwise"
-	         3 "90 Degrees CounterClockwise"
-	         4 "Upside Down")
-		MONITOR_ROTATION=0
-		MONITOR_ROTATION=$(dialog --clear \
-						--backtitle "Monitor" \
-						--title "Monitor Options" \
-						--menu "Choose your Monitor Size" \
-						20 40 4 \
-						"${MONITOR_OPTIONS[@]}" \
-						2>&1 >/dev/tty);
-		clear
-		case $MONITOR_ROTATION in
-				1)
-					MONITOR_ROTATION=0
-					;;
-				2)
-					MONITOR_ROTATION=3
-					;;
-				3)
-					MONITOR_ROTATION=1
-					;;
-				4)
-					MONITOR_ROTATION=2
-					;;
-				*) 
-					MONITOR=false
-				    ;;
-				
-		esac
-	
-		if $MONITOR = true ; then	
-			if [ -f $BOOT_CONFIG_FILE ]; then
-				sed -i -E 's/^\s*(display_rotate.*)/#\1/g' $BOOT_CONFIG_FILE
-			fi
-			echo "display_rotate=$MONITOR_ROTATION" >> $BOOT_CONFIG_FILE
-		fi
+	if promptYN "Do you want to configure the monitor?" "N";
+    then
+        MONITOR=true
+    	MONITOR_OPTIONS=(1 "No Monitor"
+    			 2 "1920 x 1080 | 1080p"
+    	         3 "1280 x 720  | 720p"
+    	         4 "1600 x 1200"
+    	         5 "1680 x 1050"
+    	         6 "1920 x 1200")
+    	HDMI_GROUP=1
+    	HDMI_MODE=16
+    	MONITOR_RESOLUTION=$(dialog --clear \
+    	                --backtitle "Monitor" \
+    	                --title "Monitor Options" \
+    	                --menu "Choose your Monitor Size" \
+    	                20 40 6 \
+    	                "${MONITOR_OPTIONS[@]}" \
+    	                2>&1 >/dev/tty);
+    	clear
+    	case $MONITOR_RESOLUTION in
+    			2)
+    				HDMI_GROUP=1
+    				HDMI_MODE=16
+    				;;
+    			3)
+    				HDMI_GROUP=1
+    				HDMI_MODE=4
+    				;;
+    			4)
+    				HDMI_GROUP=1
+    				HDMI_MODE=2
+    				;;
+    			5)
+    				HDMI_GROUP=2
+    				HDMI_MODE=51
+    				;;
+    			6)
+    				HDMI_GROUP=2
+    				HDMI_MODE=68
+    				;;
+    			*) 
+    				MONITOR=false
+    			    ;;
+    	esac
+    	if $MONITOR = true ; then		
+    	
+    		if [ -f $BOOT_CONFIG_FILE ]; then
+    			sed -i -E 's/^\s*(hdmi_group.*)/#\1/g' $BOOT_CONFIG_FILE
+    			sed -i -E 's/^\s*(hdmi_mode.*)/#\1/g' $BOOT_CONFIG_FILE
+    		fi
+    		echo "hdmi_group=$HDMI_GROUP" >> $BOOT_CONFIG_FILE
+    		echo "hdmi_mode=$HDMI_MODE" >> $BOOT_CONFIG_FILE
+    		MONITOR_OPTIONS=(1 "No Rotation"
+    			 2 "90 Degrees Clockwise"
+    	         3 "90 Degrees CounterClockwise"
+    	         4 "Upside Down")
+    		MONITOR_ROTATION=0
+    		MONITOR_ROTATION=$(dialog --clear \
+    						--backtitle "Monitor" \
+    						--title "Monitor Options" \
+    						--menu "Choose your Monitor Size" \
+    						20 40 4 \
+    						"${MONITOR_OPTIONS[@]}" \
+    						2>&1 >/dev/tty);
+    		clear
+    		case $MONITOR_ROTATION in
+    				1)
+    					MONITOR_ROTATION=0
+    					;;
+    				2)
+    					MONITOR_ROTATION=3
+    					;;
+    				3)
+    					MONITOR_ROTATION=1
+    					;;
+    				4)
+    					MONITOR_ROTATION=2
+    					;;
+    				*) 
+    					MONITOR=false
+    				    ;;
+    				
+    		esac
+    	
+    		if $MONITOR = true ; then	
+    			if [ -f $BOOT_CONFIG_FILE ]; then
+    				sed -i -E 's/^\s*(display_rotate.*)/#\1/g' $BOOT_CONFIG_FILE
+    			fi
+    			echo "display_rotate=$MONITOR_ROTATION" >> $BOOT_CONFIG_FILE
+    		fi
+        fi
 		if [ ! -f "${START_CONFIG_FILE}" ]; then
 			START_CONFIG_FILE=${GLOBAL_CONFIG_FILE}
 		fi
@@ -1204,10 +1207,10 @@ configureMonitor(){
 			fi
 		fi
 		
-		sed -i -E 's/^\s*(@chromium --kiosk.*)/#\1/g' $START_CONFIG_FILE
+		sed -i -E 's/^\s*(@chromium-browser --kiosk.*)/#\1/g' $START_CONFIG_FILE
 		if promptYN "Do you want to start with Chromium in Kiosk Mode?" "Y"; 
 		then
-			echo '@chromium --kiosk localhost' >> $START_CONFIG_FILE
+			echo '@chromium-browser --kiosk localhost' >> $START_CONFIG_FILE
 		fi
 	fi
 	 
