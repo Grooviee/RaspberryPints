@@ -141,7 +141,7 @@
                             $ibOg = round(($beer['ibu'])/(($sgOg-1)*1000), 2) * 100;
                         ?>
                             <div class="ibu-container">
-                                <div class="ibu-indicator"><div class="ibu-full" style="height:<?php echo $ibOG > 100 ? 100 : $ibOG; ?>%"></div></div>
+                                <div class="ibu-indicator"><div class="ibu-full" style="height:<?php echo $ibOg > 100 ? 100 : $ibOg; ?>%"></div></div>
                             </div>
     						<!-- 
                             <div class="ibu-container">
