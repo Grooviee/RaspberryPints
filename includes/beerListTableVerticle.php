@@ -109,7 +109,7 @@
                     <?php } ?>
                     <?php if($beer['ibu'] != ''){
                         $sgOg = convert_gravity($beer['og'], $beer['ogUnit'], UnitsOfMeasure::GravitySG);
-                        $ibOg = round(($beer['ibu'])/(($sgOg-1)*1000)), 2) * 100;
+                        $ibOg = round(($beer['ibu'])/(($sgOg-1)*1000), 2) * 100;
                         ?>
                             <!--<div class="ibu-container">
                                 <div class="ibu-indicator"><div class="ibu-full" style="height:<?php echo $ibOG > 100 ? 100 : $ibOG; ?>%"></div></div>
