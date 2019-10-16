@@ -567,9 +567,8 @@ testapache() {
 ############
 
 dbauser() {
-    ANSWER = ""
     read -e -p "Will this pi host the database? (default is: Y): " ANSWER
-    if [ "$ANSWER" = "" ]; then
+    if [ "$ANSWER" == "" ]; then
         ANSWER="Y"
     fi
     if ! echo "$ANSWER" | grep -iq "^y" ; 
@@ -586,12 +585,12 @@ dbauser() {
             MYSQL_USER=$ANSWER
         fi
 		ANSWER=""
-		read -s -e -p "MySql Admin Password for server ${MYSQL_SERVER}  (default is: ${MYSQL_PASS})?: " ANSWER
+		read -e -p "MySql Admin Password for server ${MYSQL_SERVER}  (default is: ${MYSQL_PASS})?: " ANSWER
 		if [ "$ANSWER" != "" ]; then
             MYSQL_PASS=$ANSWER
         fi
         ANSWER=""
-        read -s -e -p "MySql port for server ${MYSQL_SERVER} (default is ${MYSQL_PORT}?: " ANSWER
+        read -e -p "MySql port for server ${MYSQL_SERVER} (default is ${MYSQL_PORT})?: " ANSWER
         if [ "$ANSWER" != "" ]; then
             MYSQL_PORT=$ANSWER
         fi 
@@ -633,7 +632,7 @@ dbauser() {
         MYSQL_CMD="${MYSQL_CMD} --port=${MYSQL_PORT}"
     fi
 	USER_EXISTS="$(mysql $MYSQL_CMD -sse "SELECT EXISTS(SELECT 1 FROM mysql.user WHERE user = '${MYSQL_RP_USER}')")"
-	if [ $USER_EXISTS = 0 ];
+	if [ $USER_EXISTS == 0 ];
 	then
 		mysql ${MYSQL_CMD} -e "CREATE USER ${MYSQL_RP_USER}@'%' IDENTIFIED BY '${MYSQL_RP_PASS}';"
 	else
@@ -781,7 +780,6 @@ setupDatabase(){
 
     	mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO config ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
     												( 'repo', '${REPO_CHOICE}', 'The Repo Option from install', '0', NOW(), NOW() );";
-    	
 	fi
 
 	if [ -f "${WWWPATH}/index.html" ]; then

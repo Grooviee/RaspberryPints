@@ -119,7 +119,7 @@ img {
 }
 .bodywrapper
 {
-	width: 101%;
+	width: 99%;
 	height: 99%;
 	overflow: auto;
 	
@@ -470,12 +470,12 @@ table h1{
 	color: white;
 	opacity:1;
 	display:block;
-	font: 1em Georgia;
+	font: 3em Georgia;
 	font-weight: bold;
 }
 table .subhead{
 	width:100%;
-	font: .9em Georgia;
+	font: 2.3em Georgia;
 	text-align:left;
 }
 p.rating .num {
