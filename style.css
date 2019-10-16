@@ -108,6 +108,9 @@ h1 {
 	font: Georgia;
 	color: #FFFFFF;
 }
+h1#HeaderTitle {
+	font-size: 4em;
+}
 h2, h3, p {
 	margin: 0;
 	font: Georgia;
