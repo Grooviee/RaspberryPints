@@ -779,10 +779,7 @@ setupDatabase(){
 
     	mysql ${MYSQL_CMD} -D ${MYSQL_DB_NAME} -e "INSERT INTO config ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
     												( 'repo', '${REPO_CHOICE}', 'The Repo Option from install', '0', NOW(), NOW() );";
-<<<<<<< HEAD
     	
-=======
->>>>>>> 971ff1b2ee941c67f4b6cc56bf2dd8697e72d310
 	fi
 
 	if [ -f "${WWWPATH}/index.html" ]; then
