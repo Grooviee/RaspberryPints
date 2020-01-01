@@ -195,7 +195,7 @@
                         
                         <?php 
                             if($config[ConfigNames::ShowBeerRating]){ 
-                                beerRATING($config, $beer['untID'], $beer['rating']);
+                                beerRATING($config, $beer['untID'], $beer['rating'], FALSE);
                             } 
                         ?>
 					

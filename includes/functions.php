@@ -61,24 +61,24 @@ function beerRATING($config, $untID, $rating=NULL, $displayOnly=TRUE ) {
     	
     	$filetimemod = 0;
     	if(file_exists($cachefile)) {
-    	    $filetimemod = filemtime($cachefile)+86400;
+    	    $filetimemod = filemtime($cachefile)+3600;
     	}
     	//If display then only use the cache file otherwise we are saving the beer and want to update the cache
     	if ($displayOnly && $filetimemod > 0) {
     		include $cachefile;
-    	} elseif($filetimemod == 0 || time()<$filetimemod){
+    	} elseif($filetimemod == 0 || time() > $filetimemod){
     	    $img = "";
     		ob_start();
     		// This section calls for the rating from Untappd																		
-    		if($config[ConfigNames::ClientID] && $beer->untID!='0'){ 
+    		if($config[ConfigNames::ClientID] && $beer->untID!='0') { 
     			$ut = new Pintlabs_Service_Untappd($config);
     			$rs = 0;
-    			try{
+    			try {
         			$feed = $ut->beerInfo($untID)->response->beer;
         			$rs = $feed->rating_score;
         			$rs = .5*floor($rs/.5);
         			$img = "<span class=\"rating small\" style=\"background-position: 0 ".(-48*$rs)."px;\"></span><span class=\"num\">(".$rs.")</span>";
-    			}catch(Exception $e){
+    			} catch(Exception $e) {
     			    
     			}
     		}
