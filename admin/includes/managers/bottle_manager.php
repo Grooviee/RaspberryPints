@@ -29,8 +29,8 @@ class BottleManager extends Manager{
 					Srm::fromColors("blue", "0, 0, 255"),
 				    Srm::fromColors("red","255,0,0"),
 				    Srm::fromColors("green","0,255,0"),
-				    Srm::fromColors("silver","211,211,211")
-				   );
+				   Srm::fromColors("silver","211,211,211")
+);
 		return $colors;
 	
 	}
