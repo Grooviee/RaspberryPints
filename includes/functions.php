@@ -69,12 +69,12 @@ function beerRATING($config, $untID, $rating=NULL, $displayOnly=TRUE ) {
     	
     	$filetimemod = 0;
     	if(file_exists($cachefile)) {
-    	    $filetimemod = filemtime($cachefile)+3600;
+    	    $filetimemod = filemtime($cachefile)+300;
     	}
     	//If display then only use the cache file otherwise we are saving the beer and want to update the cache
-    	if ($displayOnly && $filetimemod > 0) {
+    	if (($displayOnly && $filetimemod > 0) || time() < $filetimemod) {
     		include $cachefile;
-    	} elseif($filetimemod == 0 || time() > $filetimemod){
+    	} elseif($filetimemod == 0 || time() >= $filetimemod){
     	    $img = "";
     		ob_start();
     		// This section calls for the rating from Untappd																		
