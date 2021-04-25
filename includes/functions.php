@@ -5,7 +5,7 @@ require_once __DIR__.'/Pintlabs/Service/Untappd.php';
 
 function utBreweryFeed($config, $breweryId) {
 	
-	if(!isset($untID))return;
+    if(!isset($breweryId))return;
 	$cachefile = "cache/bfeed";
 	$filetimemod = 0;
 	if(file_exists($cachefile)) {
@@ -17,7 +17,7 @@ function utBreweryFeed($config, $breweryId) {
 		ob_start();
 		
 		$ut = new Pintlabs_Service_Untappd($config);
-		$bfeed = $ut->breweryFeed($breweryId, '', '', 4)->response->checkins;
+		$bfeed = $ut->breweryFeed($breweryId, '', '', 3)->response->checkins;
 	
 		$bfeeds .="<table width=95%><tr>";
 
@@ -25,10 +25,18 @@ function utBreweryFeed($config, $breweryId) {
 			
 			$j = $i->beer->beer_name;
 			$bfeeds .="<td width=20%><table width=95%><tr><td><div class='beerfeed'>";
-			$bfeeds .="<center><div class=circular style='width: 50px;height: 50px;background-image: url(". $i->user->user_avatar .");background-size: cover;display: block;border-radius: 100px;-webkit-border-radius:  100px;-moz-border-radius: 100px;'></div>";
-			$bfeeds .="".$i->user->user_name."<br />";
-
-			$bfeeds .=$i->beer->beer_name;
+			$bfeeds .="<center><div class=circular style='width: 49px;height: 49px;background-image: url(". $i->user->user_avatar ."); background-size: cover;border: 2px #FFCC00 solid; border-radius: 100px; margin: 1px;float: left;'></div>";
+			$bfeeds .="<center><div class=circular style='width: 49px;height: 49px;background-image: url(". $i->beer->beer_label .");background-size: cover; display: block; border: 2px #FFCC00 solid; border-radius: 100px; margin: 1px; float: right'></div>";
+			
+			// $bfeeds .="".$i->user->user_name."<br />";
+			
+			$bfeeds .="".$i->user->first_name." ";
+			$bfeeds .="".$i->user->last_name." is drinking a <br />";
+			
+			$bfeeds .="".$i->beer->beer_name." <br />";
+			
+			$bfeeds .="by ".$i->brewery->brewery_name."";
+			
 
 			$bfeeds .="</td></tr></table>";
 			$bfeeds .="</div></td>";
@@ -70,7 +78,7 @@ function beerRATING($config, $untID, $rating=NULL, $displayOnly=TRUE ) {
     	    $img = "";
     		ob_start();
     		// This section calls for the rating from Untappd																		
-    		if($config[ConfigNames::ClientID] && $beer->untID!='0') { 
+    		if($config[ConfigNames::ClientID] && $untID!='0'){ 
     			$ut = new Pintlabs_Service_Untappd($config);
     			$rs = 0;
     			try {
@@ -105,22 +113,28 @@ function beerRATING($config, $untID, $rating=NULL, $displayOnly=TRUE ) {
  
  }
 
- function beerIMG($config, $untID, $displayOnly=TRUE) {
+ function beerIMG($config, $untID, $beerId, $displayOnly=TRUE) {
 	 
-	if(!isset($untID))return;
+     if(!isset($untID) && !isset($beerId))return;
 	$cachefile = __DIR__."/cache/img/".$untID."";
 	$filetimemod = 0;
 	if(file_exists($cachefile)) {
 	    //update 1 time per year
 	    $filetimemod = filemtime($cachefile)+31536000;
 	}
+	
+	if( isset($beerId) ) $imgFiles = glob ( 'img/beer/beer'.$beerId.'.*' );
+	if( isset($beerId) && count($imgFiles) > 0 ){
+	    $imgs = "<img src=".$imgFiles[0]." style=\"border:0;width:100px\">";
+	    echo $imgs;
+	}
 	//If display then only use the cache file otherwise we are saving the beer and want to update the cache
-	if ($displayOnly && $filetimemod > 0) {
+	else if ($displayOnly && $filetimemod > 0) {
 		include $cachefile;
 	}else if($filetimemod == 0 || time()<$filetimemod) {
 		ob_start();
 		$img = 'https://d1c8v1qci5en44.cloudfront.net/site/assets/images/temp/badge-beer-default.png';
-		if($config[ConfigNames::ClientID] && $beer->untID!='0'){ 
+		if($config[ConfigNames::ClientID] && $untID!='0'){ 
 			$ut = new Pintlabs_Service_Untappd($config);
 			try {
     			$feed = $ut->beerInfo($untID)->response->beer;

@@ -14,6 +14,16 @@
 	require_once __DIR__.'/admin/includes/managers/bottle_manager.php';
 	require_once __DIR__.'/admin/includes/managers/pour_manager.php'; 
 		
+	$plaatoPins = array(
+	    "style" => 'v64',
+	    "abv" => 'v68',
+	    "og" => 'v65',
+	    "fg" => 'v66',
+	    "remainAmount" => 'v51',
+	    "lastPour" => 'v47',
+	    "temp" => 'v69'
+	);
+	$plaatoTemps = array();
 	//This can be used to choose between CSV or MYSQL DB
 	$db = true;
 	
@@ -32,6 +42,7 @@
 		{
 			$beeritem = array(
 				"id" => $b['id'],
+				"beerId" => $b['beerId'],
 				"beername" => $b['name'],
 				"untID" => $b['untID'],
 				"style" => $b['style'],
@@ -53,10 +64,41 @@
 				"tapNumber" => $b['tapNumber'],
 				"rating" => $b['rating'],
 				"srmRgb" => $b['srmRgb'],
-				"valvePinState" => $b['valvePinState']
+				"valvePinState" => $b['valvePinState'],
+			    "plaatoAuthToken" => $b['plaatoAuthToken'],
+			    "containerType" => $b['containerType'],
+			    "kegType" => $b['kegType'],
+			    "accolades" => $b['accolades']
 			);
+			if($config[ConfigNames::UsePlaato]) {
+    			if(isset($b['plaatoAuthToken']) && $b['plaatoAuthToken'] !== NULL && $b['plaatoAuthToken'] != '')
+    			{
+    			    foreach( $plaatoPins as $value => $pin)
+    			    {
+    			        $plaatoValue = file_get_contents("http://plaato.blynk.cc/".$b['plaatoAuthToken']."/get/".$pin);
+    			        $plaatoValue = substr($plaatoValue, 2, strlen($plaatoValue)-4);
+    			        if( $value == 'fg' || $value == 'og' ) $plaatoValue = $plaatoValue/1000;
+    			        if( $value == "temp"){
+    			            if($config[ConfigNames::UsePlaatoTemp])
+    			            {
+    			                $tempInfo["tempUnit"] = (strpos($plaatoValue,"C")?UnitsOfMeasure::TemperatureCelsius:UnitsOfMeasure::TemperatureFahrenheight);
+    			                $tempInfo["temp"] = substr($plaatoValue, 0, strpos($plaatoValue, '°'));
+    			                $tempInfo["probe"] = $b['id'];
+    			                $tempInfo["takenDate"] = date('Y-m-d H:i:s');
+    			                array_push($plaatoTemps, $tempInfo);
+    			            }
+    			            //echo $value."=http://plaato.blynk.cc/".$b['plaatoAuthToken']."/get/".$pin."-".$plaatoTemp.'-'.$plaatoValue.'<br/>';
+        			    }else{
+        			        if( $plaatoValue !== NULL && $plaatoValue != '') $beeritem[$value] = $plaatoValue;
+    			            //echo $value."=http://plaato.blynk.cc/".$b['plaatoAuthToken']."/get/".$pin."-".$beeritem[$value].'-'.$plaatoValue.'<br/>';
+        			    }
+    			        
+    			    }
+    			}
+			}
 			$taps[$b['id']] = $beeritem;
 		}
+		
 		
 		$tapManager = new TapManager();
 		$numberOfTaps = $tapManager->getNumberOfTaps();
@@ -68,6 +110,7 @@
 		{
 			$beeritem = array(
 				"id" => $b['id'],
+				"beerId" => $b['beerId'],
 				"beername" => $b['name'],
 				"untID" => $b['untID'],
 				"style" => $b['style'],
@@ -90,7 +133,11 @@
 				"capNumber" => $b['capNumber'],
 				"rating" => $b['rating'],
 				"srmRgb" => $b['srmRgb'],
-				"valvePinState" => $b['valvePinState']
+			    "valvePinState" => $b['valvePinState'],
+			    "plaatoAuthToken" => $b['plaatoAuthToken'],
+			    "containerType" => $b['containerType'],
+			    "kegType" => $b['kegType'],
+				"accolades" => $b['accolades']
 			);
 			$bottles[$rowNumber] = $beeritem;
       		$rowNumber = $rowNumber+1;
@@ -99,13 +146,15 @@
     	//$bottleManager->UpdateCounts();
 		$numberOfBottles = $bottleManager->getCount();
 		
-		
-		$poursManager = new PourManager();
-		$page = 1;
-		$limit = $config[ConfigNames::NumberOfDisplayPours];
-		$totalRows = 0;
-		$poursList = $poursManager->getLastPours($page, $limit, $totalRows);
-		$numberOfPours = count($poursList);
+		$numberOfPours = 0;
+		if($config[ConfigNames::ShowPourListOnHome]){
+    		$poursManager = new PourManager();
+    		$page = 1;
+    		$limit = $config[ConfigNames::NumberOfDisplayPours];
+    		$totalRows = 0;
+    		$poursList = $poursManager->getLastPours($page, $limit, $totalRows);
+    		$numberOfPours = count($poursList);
+		}
 	}
 		
 ?>
@@ -134,10 +183,26 @@
 		<link rel="shortcut icon" href="img/pint.ico">
 <!-- <meta name="viewport" content="initial-scale=0.7,width=device-width,height=device-height,target-densitydpi=device-dpi,user-scalable=yes" />  -->		
 		<script type="text/javascript" src="admin/scripts/ws.js"></script>	
+		<script type="text/javascript">
+			function toggleFullScreen() {
+        	  var doc = window.document;
+        	  var docEl = doc.documentElement;
+
+        	  var requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+        	  var cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+
+        	  if(!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+        	    requestFullScreen.call(docEl);
+        	  }
+        	  else {
+        	    cancelFullScreen.call(doc);
+        	  }
+        	}
+        </script>
 	</head> 
 
 <!--<body> -->
-<body onload="wsconnect(); ">
+<body onload="wsconnect(); <?php if($config[ConfigNames::ShowTempOnMainPage])echo "setTimeout(function(){window.location.reload(1);}, 60000);"; ?>">
 		<div class="bodywrapper" id="mainTable">
 			<!-- Header with Brewery Logo and Project Name -->
 			<div class="header clearfix">
@@ -148,34 +213,48 @@
 						<a href="admin/admin.php"><img src="<?php echo $config[ConfigNames::LogoUrl] . "?" . time(); ?>" height="100" alt=""></a>
 					<?php } ?>
 				</div>
-				<div class="HeaderCenter">
-					<h1 id="HeaderTitle">
-						<?php
-							if (mb_strlen($config[ConfigNames::HeaderText], 'UTF-8') > ($config[ConfigNames::HeaderTextTruncLen])) {
-								echo htmlentities(substr($config[ConfigNames::HeaderText],0,$config[ConfigNames::HeaderTextTruncLen]) . "...");
-							} else {
-								echo htmlentities($config[ConfigNames::HeaderText]);
-							}
-						?>
-					</h1>
+				<div class="HeaderCenter" onClick="toggleFullScreen()">
+					<?php
+					if( $config[ConfigNames::ShowUntappdBreweryFeed] &&
+					    !empty($config[ConfigNames::BreweryID]) ){
+					        try{
+    						    require_once __DIR__.'/includes/functions.php';
+    						    utBreweryFeed($config, $config[ConfigNames::BreweryID]);
+					        }catch(Exception $e){
+					        //do nothing
+					        }
+						}
+					    if (strlen($config[ConfigNames::HeaderText]) > ($config[ConfigNames::HeaderTextTruncLen])) {
+							echo htmlentities(substr($config[ConfigNames::HeaderText],0,$config[ConfigNames::HeaderTextTruncLen]) . "...");
+						} else {
+							echo htmlentities($config[ConfigNames::HeaderText]);
+						}
+						
+					?>
 				</div>
           		<?php 
       		        $temp = null;
       		        if(!$config[ConfigNames::ShowLastPour]){ 
       		    ?>
               		<?php 
-              		    
+              		    $tempDisplay = "";
+              		    $date = null;
               		    if($config[ConfigNames::ShowTempOnMainPage]) {
-              		       $tempProbeManager = new TempProbeManager();
-              		       $tempInfos = $tempProbeManager->get_lastTemp();
-              		       foreach($tempInfos as $tempInfo){
-              		           $temp = $tempInfo["temp"];
-              		           $tempUnit = $tempInfo["tempUnit"];
-              		           $probe = $tempInfo["probe"];
-              		           $date = $tempInfo["takenDate"];
-              		           $tempDisplay .= sprintf('%s:%0.1f%s<br/>', $probe, convert_temperature($temp, $tempUnit, $config[ConfigNames::DisplayUnitTemperature]), $config[ConfigNames::DisplayUnitTemperature] );
-              		       }
-              		       if( isset($date) && isset($tempDisplay) )$tempDisplay .= sprintf('%s', str_replace(' ', "<br/>", $date));
+              		        if(!isset($plaatoTemps) || count($plaatoTemps) == 0)
+              		        {
+                  		       $tempProbeManager = new TempProbeManager();
+                  		       $tempInfos = $tempProbeManager->get_lastTemp();
+              		        }else{
+              		            $tempInfos = $plaatoTemps;
+              		        }
+              		        foreach($tempInfos as $tempInfo){
+              		            $temp = $tempInfo["temp"];
+              		            $tempUnit = $tempInfo["tempUnit"];
+              		            $probe = $tempInfo["probe"];
+              		            $date = MAX($tempInfo["takenDate"], $date);
+              		            $tempDisplay .= sprintf('%s:%0.1f%s<br/>', $probe, convert_temperature($temp, $tempUnit, $config[ConfigNames::DisplayUnitTemperature]), $config[ConfigNames::DisplayUnitTemperature] );
+              		        }
+              		        if( isset($date) && isset($tempDisplay) )$tempDisplay .= sprintf('%s', str_replace(' ', "<br/>", $date));
               		    }
               		    echo '<div class="HeaderRight" style="width:15%;text-align:right;vertical-align:middle">'.$tempDisplay.'</div>';     
               		    
@@ -189,7 +268,7 @@
           	     ?>
           			   <div class="temp-container">
           			   <div class="temp-indicator">
-          			   		<div class="temp-full" style="height:<?php echo $temp; ?>%; padding-right: 50px"></div>
+          			   		<div class="temp-full" style="height:<?php echo convert_temperature($temp, $tempUnit, UnitsOfMeasure::TemperatureFahrenheight); ?>%; padding-right: 50px"></div>
           			   </div>
           		        </div>
           		<?php }elseif($config[ConfigNames::ShowLastPour]) { ?>
@@ -198,10 +277,20 @@
     					<td class="poursbeername">	
     						<h1 style="text-align: right">Last Pour</h1>
     					</td>
+					<?php 
+					if(!$config[ConfigNames::ShowPourListOnHome]){
+					    $poursManager = new PourManager();
+					    $page = 1;
+					    $limit = 1;
+					    $totalRows = 0;
+					    $poursList = $poursManager->getLastPours($page, $limit, $totalRows);
+					    $numberOfPours = 0;//count($poursList);
+            		}
+            		?>
     				<?php $pour = count($poursList)>0?array_values($poursList)[0]:null;?>
     				<?php if(null !== $pour) {?>
     					<td class="poursbeername">	
-    						<h1 style="font-size: .5em"><?php echo $pour->get_beerName(); ?></h1>
+    						<h1 style="font-size: 1em"><?php echo $pour->get_beerName(); ?></h1>
     					</td>
                         <td class="poursamount">
                             <h1><?php echo $pour->get_amountPouredDisplay(); ?></h1>
@@ -225,7 +314,7 @@
 				if($numberOfTaps > 0)printBeerList($taps, $numberOfTaps, ConfigNames::CONTAINER_TYPE_KEG);
 			    if($numberOfTaps > 0 && $numberOfBottles > 0) echo "<h1 style=\"text-align: center;\">Bottles</h1>";
 				if($numberOfBottles > 0) printBeerList($bottles, $numberOfBottles, ConfigNames::CONTAINER_TYPE_BOTTLE);
-			    if($numberOfPours > 0 ) echo "<h1 style=\"text-align: center;\">Pours</h1>";
+			    if($numberOfPours > 0) echo "<h1 style=\"text-align: center;\">Pours</h1>";
 				if($numberOfPours > 0) printPoursList($poursList);
 			?>
 		</div>
@@ -252,6 +341,8 @@
 			}
 
 			wsconnect();
+
+			<?php if($config[ConfigNames::ShowTempOnMainPage])echo "setTimeout(function(){window.location.reload(1);}, 60000);"; ?>
 		}
 		</script>
 		<?php } ?>

@@ -52,17 +52,16 @@ else
 	while ($xml && ($recipe = $xml->RECIPE[$ii++]))
 	{
 		$styleId = '';
-		$catNum = $recipe->STYLE->CATEGORY . $recipe->STYLE->LETTER;
-		$styleName = $recipe->STYLE->NAME;
+		$catNum = $recipe->STYLE->CATEGORY . ($recipe->STYLE->LETTER?$recipe->STYLE->LETTER:$recipe->STYLE->STYLE_LETTER);
+		$styleName = encode($recipe->STYLE->NAME);
 
 		$beerStyleManager = new BeerStyleManager();
 		$beerStyle = $beerStyleManager->GetByNameOrCatNum($styleName, $catNum);
-		if(!$beerStyle){
+		if(!$beerStyle && $styleName != '' && $catNum != ''){
 		    $beerStyle = new BeerStyle();
 		    $beerStyle->set_category($recipe->STYLE->CATEGORY);
-		    $beerStyle->set_catNum($_catNum)($catNum);
+		    $beerStyle->set_catNum($catNum);
 		    $beerStyle->set_name($styleName);
-		    $beerStyle->set_($styleName);
 		    $beerStyle->set_ogMin($recipe->STYLE->OG_MIN);
 		    $beerStyle->set_ogMax($recipe->STYLE->OG_MAX);
 		    $beerStyle->set_fgMin($recipe->STYLE->FG_MIN);
@@ -83,7 +82,7 @@ else
 		}
 		
 		$beer = new Beer();
-		$beer->set_name($recipe->NAME);
+		$beer->set_name(encode($recipe->NAME));
 		if($beerStyle)$beer->set_beerStyleId($beerStyle->get_id());
 		$beer->set_abv(preg_replace("/[^0-9|.]/", "", $recipe->ABV));
 		$beer->set_og(preg_replace("/[^0-9|.]/", "", $recipe->OG));
@@ -91,8 +90,8 @@ else
 		$beer->set_srm(preg_replace("/[^0-9|.]/", "", ($recipe->SRM?$recipe->SRM:$recipe->EST_COLOR)));
 		if( floatval($beer->get_srm()) > MAX_SRM ) $beer->set_srm(MAX_SRM) ;
 		$beer->set_ibu(preg_replace("/[^0-9|.]/", "", $recipe->IBU));
-		$beer->set_notes($recipe->NOTES);
-		if(!$beer->get_notes() || $beer->get_notes() == '')$beer->set_notes($recipe->TASTE_NOTES);
+		$beer->set_notes(encode($recipe->NOTES));
+		if(!$beer->get_notes() || $beer->get_notes() == '')$beer->set_notes(encode($recipe->TASTE_NOTES));
 		$beer->set_untID($recipe->UNTAPPEDID);
 		$beer->set_rating(preg_replace("/[^0-9|.]/", "", $recipe->RATING));
 		if($brewery)$beer->set_breweryId($brewery->get_id());
@@ -118,10 +117,10 @@ else
             
             foreach ($recipe->FERMENTABLES->FERMENTABLE as $fermentable) 
             {
-              $dbFerm = $fermManager->GetByName($fermentable->NAME);
+              $dbFerm = $fermManager->GetByName(encode($fermentable->NAME));
               if(!$dbFerm){
                   $dbFerm = new Fermentable();
-                  $dbFerm->set_name($fermentable->NAME);
+                  $dbFerm->set_name(encode($fermentable->NAME));
                   $dbFerm->set_srm($fermentable->COLOR);
                   $dbFerm->set_notes($fermentable->NOTES);
                   $dbFerm->set_type($fermentable->TYPE);
@@ -132,17 +131,17 @@ else
               $beerFerm = new BeerFermentable();
               $beerFerm->set_beerID($beerId);
               $beerFerm->set_fermentable($dbFerm);
-              $beerFerm->set_amount($fermentable->DISPLAY_AMOUNT);
+              if($fermentable->AMOUNT)$beerFerm->set_amount($fermentable->AMOUNT);
+              if($fermentable->DISPLAY_AMOUNT)$beerFerm->set_amount($fermentable->DISPLAY_AMOUNT);
               $beerFermManager->Save($beerFerm);			  
             }
 	
-            $hops[] = $hop->NAME;
             foreach ($recipe->HOPS->HOP as $hop)
             {
-              $dbHop = $hopManager->GetByName($hop->NAME);
+              $dbHop = $hopManager->GetByName(encode($hop->NAME));
               if(!$dbHop){
                   $dbHop = new Hop();
-                  $dbHop->set_name($hop->NAME);
+                  $dbHop->set_name(encode($hop->NAME));
                   $dbHop->set_alpha($hop->ALPHA);
                   $dbHop->set_beta($hop->BETA);
                   $dbHop->set_notes($hop->NOTES);
@@ -153,17 +152,19 @@ else
               $beerHop = new BeerHop();
               $beerHop->set_beerID($beerId);
               $beerHop->set_hop($dbHop);
-              $beerHop->set_amount($hop->DISPLAY_AMOUNT);
-              $beerHop->set_time($hop->DISPLAY_TIME);
+              if($hop->AMOUNT)$beerHop->set_amount($hop->AMOUNT);
+              if($hop->TIME)$beerHop->set_time($hop->TIME);
+              if($hop->DISPLAY_AMOUNT)$beerHop->set_amount($hop->DISPLAY_AMOUNT);
+              if($hop->DISPLAY_TIME)$beerHop->set_time($hop->DISPLAY_TIME);
               $beerHopManager->Save($beerHop);
             }
             
             foreach ($recipe->YEASTS->YEAST as $yeast)
             {
-              $dbYeast = $yeastManager->GetByName($yeast->NAME);
+              $dbYeast = $yeastManager->GetByName(encode($yeast->NAME));
               if(!$dbYeast){
                   $dbYeast = new Yeast();
-                  $dbYeast->set_name($yeast->NAME);
+                  $dbYeast->set_name(encode($yeast->NAME));
                   $dbYeast->set_format($yeast->FORM);
                   $dbYeast->set_notes($yeast->NOTES.' - Best For:'.$yeast->BEST_FOR);
                   $dbYeast->set_minAttenuation(preg_replace("/[^0-9|.]/", "", $yeast->ATTENUATION));

@@ -36,12 +36,30 @@ Configuration Updated
     			<?php
     			    $result = getConfigurableConfigs();
     				foreach($result as $row) {
+    				    $options = array();
+    				    $options[0] = 'On';
+    				    $options[1] = 'Off';
+    				    $validation = $row['validation'];
+    				    if( $validation !== NULL && $validation != ''){
+    				        $valids = explode('|', $validation);
+    				        for( $i = 0; $i < count($valids); $i++ ){
+    				            $options[$i] = $valids[$i];
+    				        }
+    				    }
     				    echo '<h3>' . $row['displayName'] . ":"  .'<span id="' . $row['configName'] . 'Success" style="display:none; color: #8EA534;"> (Updated)</span>'. '</h3>'.
-    					'On<input type="radio" ' . ($row['configValue']?'checked':'') . ' name="' . $row['configName'] . '" value="1" onclick="changeConfiguration(this)">' .
-    					'Off<input type="radio" ' . (!$row['configValue']?'checked':'') . ' name="' . $row['configName'] . '" value="0" onclick="changeConfiguration(this)">'. 
+        				    $options[0].'<input type="radio" ' . ($row['configValue']?'checked':'') . ' name="' . $row['configName'] . '" value="1" onclick="changeConfiguration(this)">' .
+        				    $options[1].'<input type="radio" ' . (!$row['configValue']?'checked':'') . ' name="' . $row['configName'] . '" value="0" onclick="changeConfiguration(this)">'. 
     					
     					'<br><br>';
     			} ?>
+    			<a id="numDisplayPours"></a>
+        		<p><b>Number of Pours to show on home page:</b> </p>
+        		<form method="post" action="includes/config_update.php">
+        			<input type="text" class="largebox" value="<?php echo $configs[ConfigNames::NumberOfDisplayPours]; ?>" name="configValue"> &nbsp; 
+        				<?php echo '<input type="hidden" name="configName" value="'.ConfigNames::NumberOfDisplayPours.'"/>'; ?>
+        				<?php echo '<input type="hidden" name="jumpto" value="#numDisplayPours"/>'; ?>
+        			<input type="submit" class="btn" name="Submit" value="Submit">
+        		</form>
     		</div>
 		<hr />
 
@@ -51,7 +69,20 @@ Configuration Updated
 		$Client_ID=$configs[ConfigNames::ClientID];
 		$Client_Secret=$configs[ConfigNames::ClientSecret];
 		$BreweryID=$configs[ConfigNames::BreweryID];
+		$RedirectUri=$configs[ConfigNames::RedirectUri];
+		$amountPerPint=$configs[ConfigNames::AmountPerPint];
+		$numAccoladeDisplay=$configs[ConfigNames::NumAccoladeDisplay];
 	?>
+	<a id="amountPerPint"></a> 
+		<h2>Remaining Amount Display</h2><br><br>
+		<p><b>Amount (<?php echo $configs[ConfigNames::DisplayUnitVolume]?>) Per Pint:</b>(If greater than 0 then pints remaining will be displayed)</p>
+			<form method="post" action="includes/config_update.php" id="amountPerPintForm">
+				<input type="text" class="largebox" value="<?php echo $amountPerPint; ?>" name="configValue"> &nbsp; 
+				<?php echo '<input type="hidden" name="configName" value="'.ConfigNames::AmountPerPint.'"/>'; ?>
+				<?php echo '<input type="hidden" name="jumpto" value="#amountPerPint"/>'; ?>
+				<input type="submit" class="btn" name="Submit" value="Submit">
+			</form><br><br>
+			<hr />
 	<a id="header"></a> 
 		<h2>Taplist Header</h2><br><br>
 		<p><b>Text to Display:</b></p>
@@ -68,7 +99,40 @@ Configuration Updated
 				<?php echo '<input type="hidden" name="jumpto" value="#header"/>'; ?>
 				<input type="submit" class="btn" name="Submit" value="Submit">
 			</form>
+			<?php 
+			if(!empty($BreweryID)){
+      			$result = getConfig(ConfigNames::ShowUntappdBreweryFeed);
+    			if($result) {
+    			    $row=$result;
+    			    $options = array();
+    			    $options[0] = 'On';
+    			    $options[1] = 'Off';
+    			    $validation = $row['validation'];
+    			    if( $validation !== NULL && $validation != ''){
+    			        $valids = explode('|', $validation);
+    			        for( $i = 0; $i < count($valids); $i++ ){
+    			            $options[$i] = $valids[$i];
+    			        }
+    			    }
+    			    echo '<h3>' . $row['displayName'] . ":"  .'<span id="' . $row['configName'] . 'Success" style="display:none; color: #8EA534;"> (Updated)</span>'. '</h3>'.
+    				    $options[0].'<input type="radio" ' . ($row['configValue']?'checked':'') . ' name="' . $row['configName'] . '" value="1" onclick="changeConfiguration(this)">' .
+    				    $options[1].'<input type="radio" ' . (!$row['configValue']?'checked':'') . ' name="' . $row['configName'] . '" value="0" onclick="changeConfiguration(this)">'. 
+    				
+    				'<br><br>';
+        			} 
+			}
+			?>
 			<hr />
+    	<a id="numAccoladesDisplay"></a> 
+    		<h2>Number of Accolades per <?php echo $configs[ConfigNames::ShowVerticleTapList]?"Row":"Column" ?></h2><br><br>
+			<p><b>The number of accolades to display per <?php echo $configs[ConfigNames::ShowVerticleTapList]?"Row":"Column" ?> inside the accolade <?php echo $configs[ConfigNames::ShowVerticleTapList]?"Row":"Column" ?>:</b></p>
+    			<form method="post" action="includes/config_update.php" id="numAccoladesDisplayForm">
+    				<input type="text" class="largebox" value="<?php echo $numAccoladeDisplay; ?>" name="configValue"> &nbsp; 
+    				<?php echo '<input type="hidden" name="configName" value="'.ConfigNames::NumAccoladeDisplay.'"/>'; ?>
+    				<?php echo '<input type="hidden" name="jumpto" value="#numAccoladesDisplay"/>'; ?>
+    				<input type="submit" class="btn" name="Submit" value="Submit">
+    			</form><br><br>
+    			<hr />
 		<a id="untappd"></a>
 		<h2>Untappd Settings</h2>
 		<p><b>Untappd ClientID:</b> </p>
@@ -92,6 +156,13 @@ Configuration Updated
 				<?php echo '<input type="hidden" name="jumpto" value="#untappd"/>'; ?>
 				<input type="submit" class="btn" name="Submit" value="Submit">
 			</form>
+		<p><b>Untappd Redirect:</b> </p>
+			<form method="post" action="includes/config_update.php">
+				<input type="text" class="largebox" value="<?php echo $RedirectUri; ?>" name="configValue"> &nbsp; 
+				<?php echo '<input type="hidden" name="configName" value="'.ConfigNames::RedirectUri.'"/>'; ?>
+				<?php echo '<input type="hidden" name="jumpto" value="#untappd"/>'; ?>
+				<input type="submit" class="btn" name="Submit" value="Submit">
+			</form>
 		<hr />
 	<a id="tapListLogo"></a> 
 		<h2>Taplist Logo</h2>
@@ -99,11 +170,11 @@ Configuration Updated
 			<b>Current image:</b><br /><br />
 			<img src="../img/logo.png<?php echo "?" . time(); ?>" height="100" alt="Brewery Logo" style="border-style: solid; border-width: 2px; border-color: #d6264f;" />
 			<form enctype="multipart/form-data" action="includes/upload_image.php" method="POST"><br />
-				<input name="uploaded" type="file" accept="image/gif, image/jpg, image/png"/>
+				<input name="uploaded" type="file" accept="image/gif, image/jpg, image/png" onchange="$('#taplistUpload').css('visibility', 'visible')"/>
 				<?php echo '<input type="hidden" name="target" value="../../img/logo.png"/>'; ?>
 				<?php echo '<input type="hidden" name="jumpto" value="#untappd"/>'; ?>
 				<?php echo '<input type="hidden" name="jumpto" value="#tapListLogo"/>'; ?>
-				<input type="submit" class="btn" value="Upload" />
+				<input type="submit" id="taplistUpload" class="btn" value="Upload" style="visibility: hidden" />
 			</form> 
 			<hr />
 	<a id="adminLogo"></a> 
@@ -112,10 +183,10 @@ Configuration Updated
 			<b>Current image:</b><br /><br />
 			<img src="img/logo.png<?php echo "?" . time(); ?>" height="100" alt="Brewery Logo" style="border-style: solid; border-width: 2px; border-color: #d6264f;" />
 			<form enctype="multipart/form-data" action="includes/upload_image.php" method="POST"><br />
-				<input name="uploaded" type="file" accept="image/gif, image/jpg, image/png"/>
+				<input name="uploaded" type="file" accept="image/gif, image/jpg, image/png" onchange="$('#adminUpload').css('visibility', 'visible')"/>
 				<?php echo '<input type="hidden" name="target" value="../img/logo.png"/>'; ?>
 				<?php echo '<input type="hidden" name="jumpto" value="#adminLogo"/>'; ?>
-				<input type="submit" class="btn" value="Upload" />
+				<input type="submit" id="adminUpload" class="btn" value="Upload" style="visibility: hidden" />
 			</form> 
 
 		<hr />
@@ -125,10 +196,10 @@ Configuration Updated
 			<b>Current image:</b><br /><br />
 				<img src="../img/background.jpg<?php echo "?" . time(); ?>" width="200" alt="Background" style="border-style: solid; border-width: 2px; border-color: #d6264f;" />
 			<form enctype="multipart/form-data" action="includes/upload_image.php" method="POST">
-				<input name="uploaded" type="file" accept="image/gif, image/jpg, image/png"/>
+				<input name="uploaded" type="file" accept="image/gif, image/jpg, image/png" onchange="$('#backgroupUpload').css('visibility', 'visible')"/>
 				<?php echo '<input type="hidden" name="target" value="../../img/background.jpg"/>'; ?>
 				<?php echo '<input type="hidden" name="jumpto" value="#tapListBackground"/>'; ?>
-				<input type="submit" class="btn" value="Upload" /><br /><br />
+				<input type="submit" id="backgroupUpload" class="btn" value="Upload" style="visibility: hidden" /><br /><br />
 			</form>
 			<form action="restore_background.php" method="POST">
 				<input type="submit" class="btn" value="Restore Default Background" />
@@ -207,6 +278,16 @@ include 'scripts.php';
                    }
              });
   	}
+
+	$(function() {		
+		
+		$('#amountPerPintForm').validate({
+			rules: {
+				configValue: { required: true, number: true, min: 0 }
+			}
+		});
+		
+	});
   	</script>
 </body>
 </html>

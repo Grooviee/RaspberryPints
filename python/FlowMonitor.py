@@ -18,6 +18,12 @@ import os
 import os.path
 import traceback
 import glob
+from hx711 import HX711
+MQTT_IMPORT_SUCCESSFUL = True
+try:
+    import paho.mqtt.client as mqtt # Added library for mqtt
+except:
+    MQTT_IMPORT_SUCCESSFUL = False
 
 GPIO_IMPORT_SUCCESSFUL = True
 try:
@@ -33,23 +39,23 @@ except:
     
 from Config import config
 
-alamodeRelayTrigger = 0
-
-def debug(msg):
-    if(config['flowmon.debug']):
-        log(msg)
+def debug(msg, process="FlowMonitor", logDB=True):
+    if(config['dispatch.debug']):
+        log(msg, process, True, logDB)
                  
-def log(msg):
+def log(msg, process="FlowMonitor", isDebug=False, logDB=True):
     if ("RFIDCheck" not in msg and "Status" not in msg) or log.lastMsg != msg:
-        print datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + " RPINTS: " + msg.rstrip()
-        sys.stdout.flush()
+        log.logger.log(msg, process, isDebug, logDB)
         log.lastMsg = msg
+    else:
+         if logDB:
+             log.logger.logDB(msg, process, isDebug)
 log.lastMsg = "" 
 
 class FlowMonitor(object):
     
-    def __init__(self, dispatcher):
-            
+    def __init__(self, dispatcher, logger):
+        log.logger = logger    
         if not RFID_IMPORT_SUCCESSFUL:
             log("Could not import RFID Reader, RFID disabled. Assuming SPI not installed/configured")
             
@@ -72,7 +78,7 @@ class FlowMonitor(object):
         line = bytearray()
         while True:
             c = self.arduino.read(1)
-            #debug(c)
+            #debug(repr(c))
             if c:
                 line += c
                 if line[-leneol:] == eol:
@@ -80,35 +86,42 @@ class FlowMonitor(object):
         return bytes(line[:-leneol])
     
     def setup(self):
+        if config['flowmon.port'] == "MQTT":
+                return
         hexfile = config['pints.dir'] + "/arduino/raspberrypints/raspberrypints.cpp.hex"
-        cmdline = "/usr/share/arduino/hardware/tools/avrdude -C/usr/share/arduino/hardware/tools/avrdude.conf -patmega328p -calamode -P"+self.port+" -b115200 -D -Uflash:w:"
-        cmdline = cmdline + hexfile
-        cmdline = cmdline + ":i"
-        
-        output = ""
-        if os.path.isfile(hexfile) and os.access(hexfile, os.R_OK):
-            debug("resetting alamode to try to force it to listen to us...")
-            self.dispatch.resetAlaMode()
-            debug("giving it a short break to wake up again...")
-            time.sleep(2)
-
-            try: 
-                debug("reflashing alamode via:\n" + cmdline)
-                output = subprocess.check_output(cmdline, shell=True, stderr=subprocess.STDOUT,)
-                debug( output )
-            except Exception as ex:
-                print 'RPINTS: reflashing alamode failed, moving on anyways, error was: ', ex
-                debug (output)
+        inofile = config['pints.dir'] + "/arduino/raspberrypints/raspberrypints.ino"
+        if os.path.isfile(inofile) and os.access(inofile, os.R_OK) and os.path.getmtime(inofile) > os.path.getmtime(hexfile) :
+            log("Ino newer than Hex. manual upload assumed")
         else:
-            self.resetAlamode = False
-            debug("no hexfile to flash alamode (or not readable), moving on")
+            cmdline = "/usr/share/arduino/hardware/tools/avrdude -C/usr/share/arduino/hardware/tools/avrdude.conf -patmega328p -calamode -P"+self.port+" -b115200 -D -Uflash:w:"
+            
+            cmdline = cmdline + hexfile
+            cmdline = cmdline + ":i"
+            output = ""
+            if os.path.isfile(hexfile) and os.access(hexfile, os.R_OK):
+                debug("resetting alamode to try to force it to listen to us...")
+                self.dispatch.resetAlaMode()
+                debug("giving it a short break to wake up again...")
+                time.sleep(2)
+    
+                try: 
+                    debug("reflashing Arduino via:\n" + cmdline)
+                    output = subprocess.check_output(cmdline, shell=True, stderr=subprocess.STDOUT,)
+                    debug( output )
+                except Exception as ex:
+                    print 'RPINTS: reflashing Arduino failed, moving on anyways, error was: ', ex
+                    debug (output)
+            else:
+                self.resetAlamode = False
+                debug("no hexfile to flash Arduino (or not readable), moving on")
 
     def assembleConfigMessage(self):
-        debug(  "getting config data for alamode" )
+        alamodeRelayTrigger = 0
+        debug(  "getting config data for Arduino" )
 
-        config = self.dispatch.getConfig()
+        rpConfig = self.dispatch.getConfig()
         taps = self.dispatch.getTapConfig()
-        for item in config:
+        for item in rpConfig:
             if (item["configName"] == 'useTapValves'):
                     alamodeUseTapValves = item["configValue"]
             if (item["configName"] == 'relayTrigger'):
@@ -130,29 +143,33 @@ class FlowMonitor(object):
         for tap in taps:
             pins.append(tap["flowPin"])
             valvePins.append(tap["valvePin"])
-        
+        lastLen = 0
         #'C:<numSensors>:<sensor pin>:<...>:<pourMsgDelay>:<pourTriggerValue>:<kickTriggerValue>:<updateTriggerValue>':<useRFID>|
         cfgmsg = "C:" 
         cfgmsg = cfgmsg + str(numberOfTaps) + ":"
         for pin in pins:
             cfgmsg = cfgmsg + str(pin) + ":"
-        if len(cfgmsg) > 50:
+        if len(cfgmsg) - lastLen > 50:
             cfgmsg = cfgmsg + "~"
+            lastLen = len(cfgmsg)
         cfgmsg = cfgmsg + str(alamodeUseTapValves) + ":"            
         if int(alamodeUseTapValves) > 0:
             cfgmsg = cfgmsg + str(alamodeRelayTrigger) + ":"
             for pin in valvePins:
                cfgmsg = cfgmsg + str(pin) + ":"
-        if len(cfgmsg) > 50:
-            cfgmsg = cfgmsg + "~"
+               if len(cfgmsg) - lastLen > 50:
+                    cfgmsg = cfgmsg + "~"
+                    lastLen = len(cfgmsg)
         cfgmsg = cfgmsg + alamodePourMessageDelay + ":"
         cfgmsg = cfgmsg + alamodePourTriggerCount + ":"
-        if len(cfgmsg) > 50:
+        if len(cfgmsg) - lastLen > 50:
             cfgmsg = cfgmsg + "~"
+            lastLen = len(cfgmsg)
         cfgmsg = cfgmsg + alamodeKickTriggerCount + ":"
         cfgmsg = cfgmsg + alamodeUpdateTriggerCount + ":"
         cfgmsg = cfgmsg + alamodePourShutOffCount + ":"
-        cfgmsg = cfgmsg + ("1" if self.alamodeUseRFID else "0")
+        cfgmsg = cfgmsg + ("1" if self.alamodeUseRFID else "0") + ":"
+        cfgmsg = cfgmsg + ("1" if config["dispatch.debug"] else "0")
         cfgmsg = cfgmsg + "|"
         return cfgmsg
                   
@@ -172,49 +189,59 @@ class FlowMonitor(object):
                             
     def reconfigAlaMode(self):
 
-        debug( "waiting for alamode to come alive" )
+        debug( "waiting for Arduino to come alive" )
         
         # wait for arduiono to come alive, it sens out a stream of 'a' once it's ready
         msg = self.readline_notimeout()
         while (b"alive" != msg):
             #debug("["+str(msg)+"]")
             if(b"StatusCheck" == msg):
-                msg = "Status;%s;%d;%s;|" % ("NOTOK", -1, 1)
+                msg = "Status;%s;%d;%s;|" % ("N", -1, 1)
                 debug( "Sending "+ msg )
                 self.arduino.write(msg)
             msg = self.readline_notimeout()
         self.serialResetInputBuffer()
         
-        debug( "alamode alive..." )
+        debug( "Arduino alive..." )
         self.alaIsAlive = True
         cfgmsg = self.assembleConfigMessage()
 
-        debug( "alamode config, about to send: " + cfgmsg )
+        debug( "Arduino config, about to send: " + cfgmsg )
         ii = 0
         while(ii < len(cfgmsg)):
             self.arduino.write(cfgmsg[ii:ii+1]) # send config message, this will make it send pulses
             if cfgmsg[ii:ii+1] == "~":
-                while self.serialInWaiting() == 0:
-                    time.sleep(.005)
-                reply = self.arduino.readline()
+                reply = ""
+                while reply.strip() != "continue":
+                    while self.serialInWaiting() == 0:
+                        time.sleep(.005)
+                    reply = self.arduino.readline()
             ii += 1
         debug("Waiting for Config Response")
         while self.serialInWaiting() == 0:
             time.sleep(.005)
         reply = self.arduino.readline()
-        debug( "alamode says: " + reply )
+        debug( "Arduino says: " + reply )
         
     # 'C:<numSensors>:<sensor pin>:<...>:<pourTriggerValue>:<kickTriggerValue>:<updateTriggerValue>'    
-    def monitor(self):
+    def monitor(self, flowMetersEnabld=True):
         running = True
         
-        if self.alaIsAlive is False:
-            debug( "resetting alamode" )
-            self.dispatch.resetAlaMode()
-            self.arduino = serial.Serial(self.port,9600,timeout=.5)
-        else:
-            self.alaIsAlive = False
-            debug( "NOT resetting alamode" )
+        if flowMetersEnabld :
+            if self.alaIsAlive is False:
+                debug( "resetting Arduino" )
+                if config['flowmon.port'] == "MQTT":
+                    debug( "Creating MQTT Listener" )
+                    self.arduino = MQTTListenerThread( "MQTT-1", flowMonitor=self, host=config['mqtt.host'], port=config['mqtt.port'],
+                                                       user=config['mqtt.user'], password=config['mqtt.password'] )
+                    self.arduino.start()
+                else:
+                    debug( "Creating Serial Listener" )
+                    self.dispatch.resetAlaMode()
+                    self.arduino = serial.Serial(self.port,9600,timeout=.5)
+            else:
+                self.alaIsAlive = False
+                debug( "NOT resetting Arduino" )
 
         if GPIO_IMPORT_SUCCESSFUL:
             self.motionDetectors = []
@@ -228,7 +255,10 @@ class FlowMonitor(object):
             self.loadCellThreads = []
             configMD = self.dispatch.getLoadCellConfig()
             for item in configMD:
-                loadCell = LoadCellCheckThread( "LC-" + str(item["tapId"]), updateDir=config['pints.dir'], dispatch=self.dispatch, tapId=item["tapId"], commandPin=item["loadCellCmdPin"], responsePin=item["loadCellRspPin"], unit=item["loadCellUnit"] )
+                loadCell = LoadCellCheckThread( "LC-" + str(item["tapId"]), updateDir=config['pints.dir'], 
+                                                dispatch=self.dispatch, tapId=item["tapId"], commandPin=item["loadCellCmdPin"], 
+                                                responsePin=item["loadCellRspPin"], unit=item["loadCellUnit"], logger=log.logger,
+                                                scaleRatio=item["loadCellScaleRatio"], tareOffset=item["loadCellTareOffset"] )
                 loadCell.start()
                 self.loadCellThreads.append(loadCell)
             
@@ -239,121 +269,38 @@ class FlowMonitor(object):
                 if (item["type"] == 0):
                         self.readers.append( RFIDCheckThread( "RFID-" + str(item["name"]), self.rfiddir, rfidSPISSPin=int(item["pin"]) ) )
                 self.alamodeUseRFID = True
-        self.reconfigAlaMode()
         
         self.reconfigTempProbes()
-        debug( "listening to alamode" )
+        
+        if flowMetersEnabld :
+            self.reconfigAlaMode()
+            debug( "listening to Arduino" )
+        else:
+            log("Not listening for flowmeters")
         
         try:
             while running:   
-                #msg = self.arduino.readline()
-                msg = self.readline_notimeout()
-                if not msg:
-                    continue
-                
-                reading = msg.split(";")
-                if reading[0] == "alive" :
-                    debug(msg)
-                    if self.alaIsAlive == True :
-                        debug( "alamode was restarted, restart flowmonitor" )
-                    else :
-                        debug( "alamode was started" )
-                    #incase the arduino restarts its self we want to do not alive so that we reset it next time
-                    self.alaIsAlive = not self.alaIsAlive 
-                    return # arduino was restarted, get out and let the caller restart us
-                if reading[0] == "dead" :
-                    # check if we need to reconfigure alamode
-                    debug( "alamode reconfig in progress..." )
-                    self.alaIsAlive = False
-                    return # get out and let the caller restart us                
-                if ( len(reading) < 2 ):
-                    debug( "alamode - Unknown message (length too short): "+ msg )
-                    continue
-                #debug(str(reading))
-                if ( reading[0] == "P" ):
-                    debug( "got a pour: "+ msg )
-                    MCP_RFID = str(reading[1])
-                    MCP_PIN = str(reading[2])  
-                    POUR_COUNT = str(reading[3])                    
-                    #The following 2 lines passes the PIN and PULSE COUNT to the php script
-                    subprocess.call(["php", self.poursdir, "Pour", MCP_RFID, MCP_PIN, POUR_COUNT])
-                    self.dispatch.sendflowcount(MCP_RFID, MCP_PIN, POUR_COUNT)
-                    
-                elif ( reading[0] == "U" ):
-                    debug( "got a update: "+ msg )
-                    MCP_ADDR = int(reading[1])
-                    MCP_PIN = str(reading[2])
-                    POUR_COUNT = str(reading[3])
-                    self.dispatch.sendflowupdate(MCP_PIN, POUR_COUNT)
-                    
-                elif ( reading[0] == "K" ):
-                    debug( "got a kick: "+ msg )
-                    MCP_ADDR = int(reading[1])
-                    MCP_PIN = str(reading[2])
-                    subprocess.call(["php", self.poursdir, "Kick", MCP_PIN])
-                    self.dispatch.sendkickupdate(MCP_PIN)
-                    
-                elif ( reading[0] == "SM" and len(reading) >= 3 ):
-                    #debug( "got a Pin Mode Request: "+ msg )
-                    part = 1
-                    MODE = int(reading[part])
-                    part += 1
-                    COUNT = int(reading[part])
-                    part += 1
-                    while ( part-2 <= COUNT ):
-                        self.dispatch.setpinmode(int(reading[part]), MODE)
-                        part += 1
-                    msg = "DONE;%d;%d|" % (COUNT, MODE)
-                    #debug( "Sending "+ msg )
-                    self.arduino.write(msg)
-                    
-                elif ( reading[0] == "RP" and len(reading) >= 2 ):
-                    #debug( "got a Read Pin Request: "+ msg )
-                    MCP_PIN = int(reading[1])
-                    pinState = self.dispatch.readpin(MCP_PIN) 
-                    msg = "PINREAD;%s;%s|" % (MCP_PIN, pinState)
-                    #debug( "Sending "+ msg )
-                    self.arduino.write(msg)
-                    
-                elif ( reading[0] == "WP" and len(reading) >= 3 ):
-                    #debug( "got a Write Pins Request: "+ msg )
-                    WritePinsThread("WP", reading, self.dispatch).start()
-                    msg = "DONE;%d;%d|" % (COUNT, MODE)
-                    #debug( "Sending "+ msg )
-                    self.arduino.write(msg)
-                    
-                #request basic status infomration like rfid/user and reconfig required
-                elif ( reading[0] == "StatusCheck" ):
-                    #debug("RFIDCheck")
-                    RFIDState = "NOTOK"
-                    userId = -1
-                    if self.alamodeUseRFID == True:
-                        for item in self.readers:
-                            if not item.isAlive():
-                                item.start() 
-    
-                            userId = item.getLastUserId() 
-                            if userId > -1:
-                                RFIDState = "OK"
-                                break
-                    
-                    valves = ""
-                    valvesState = self.dispatch.getValvesState()
-                    if not valvesState is None :
-                        valves = ';'.join(map(str, valvesState))
-                                
-                    msg = "Status;%s;%d;%s;%s;|" % (RFIDState, userId, self.dispatch.needAlaModeReconfig(), valves)
-                    debug( "Sending "+ msg )
-                    self.arduino.write(msg)
+                if config['flowmon.port'] != "MQTT":
+                    #msg = self.arduino.readline()
+                    msg = self.readline_notimeout()
+                    if not msg:
+                        continue
+                    if not self.processMsg(msg):
+                        return
                 else:
-                    debug( "unknown message: "+ msg )
+                    time.sleep(1)
+                    
         except:
             print("Unexpected error:", sys.exc_info()[0])
             traceback.print_exc(file=sys.stdout)
         finally:            
             if self.alaIsAlive is False :
-                debug( "closing serial connection to alamode..." )
-                self.arduino.close()
+                debug( "closing serial connection to Arduino..." )
+                if config['flowmon.port'] == "MQTT":
+                    self.arduino.exit()
+                else:
+                    self.arduino.close()
+                    
             for item in self.readers:
                 if item.isAlive():
                     item.exit()
@@ -365,10 +312,122 @@ class FlowMonitor(object):
                     item.exit()
             if self.tempProbeThread is not None and self.tempProbeThread.isAlive():
                 self.tempProbeThread.exit()
+            self.alaIsAlive = False
+            
+    def processMsg(self, msg):
+        reading = msg.split(";")
+        if reading[0] == "alive" :
+            debug(msg)
+            if self.alaIsAlive == True :
+                debug( "Arduino was restarted, restart flowmonitor" )
+            else :
+                debug( "Arduino was started" )
+            #incase the arduino restarts its self we want to do not alive so that we reset it next time
+            self.alaIsAlive = not self.alaIsAlive 
+            return False# arduino was restarted, get out and let the caller restart us
+        if reading[0] == "dead" :
+            # check if we need to reconfigure Arduino
+            debug( "Arduino reconfig in progress..." )
+            self.alaIsAlive = False
+            return False# get out and let the caller restart us                
+        if ( len(reading) < 2 ):
+            debug( "Arduino - Unknown message (length too short): "+ msg )
+            return True
+        #debug(str(reading))
+        if ( reading[0] == "P" ):
+            debug( "got a pour: "+ msg )
+            MCP_RFID = str(reading[1])
+            MCP_PIN = str(reading[2])  
+            POUR_COUNT = str(reading[3])                    
+            #The following 2 lines passes the PIN and PULSE COUNT to the php script
+            subprocess.call(["php", self.poursdir, "Pour", MCP_RFID, MCP_PIN, POUR_COUNT])
+            self.dispatch.sendflowcount(MCP_RFID, MCP_PIN, POUR_COUNT)
+            
+        elif ( reading[0] == "U" ):
+            debug( "got a update: "+ msg )
+            MCP_ADDR = int(reading[1])
+            MCP_PIN = str(reading[2])
+            POUR_COUNT = str(reading[3])
+            self.dispatch.sendflowupdate(MCP_PIN, POUR_COUNT)
+            
+        elif ( reading[0] == "K" ):
+            debug( "got a kick: "+ msg )
+            MCP_ADDR = int(reading[1])
+            MCP_PIN = str(reading[2])
+            subprocess.call(["php", self.poursdir, "Kick", MCP_PIN])
+            self.dispatch.sendkickupdate(MCP_PIN)
+            
+        elif ( reading[0] == "SM" and len(reading) >= 3 ):
+            #debug( "got a Pin Mode Request: "+ msg )
+            part = 1
+            MODE = int(reading[part])
+            part += 1
+            COUNT = int(reading[part])
+            part += 1
+            while ( part-2 <= COUNT ):
+                self.dispatch.setpinmode(int(reading[part]), MODE)
+                part += 1
+            msg = "DONE;%d;%d|" % (COUNT, MODE)
+            #debug( "Sending "+ msg )
+            self.arduino.write(msg)
+            
+        elif ( reading[0] == "RP" and len(reading) >= 2 ):
+            #debug( "got a Read Pin Request: "+ msg )
+            MCP_PIN = int(reading[1])
+            pinState = self.dispatch.readpin(MCP_PIN) 
+            msg = "PINREAD;%s;%s|" % (MCP_PIN, pinState)
+            #debug( "Sending "+ msg )
+            self.arduino.write(msg)
+            
+        elif ( reading[0] == "WP" and len(reading) >= 3 ):
+            #debug( "got a Write Pins Request: "+ msg )
+            part = 1
+            MODE = int(reading[part])
+            part += 1
+            COUNT = int(reading[part])
+            part += 1
+            WritePinsThread("WP", reading, self.dispatch).start()
+            msg = "DONE;%d;%d|" % (COUNT, MODE)
+            #debug( "Sending "+ msg )
+            self.arduino.write(msg)
+            
+        #request basic status infomration like rfid/user and reconfig required
+        elif ( reading[0] == "StatusCheck" ):
+            #debug("RFIDCheck")
+            RFIDState = "N"
+            userId = -1
+            if self.alamodeUseRFID == True:
+                for item in self.readers:
+                    if not item.isAlive():
+                        item.start() 
 
+                    userId = item.getLastUserId() 
+                    if userId > -1:
+                        RFIDState = "Y"
+                        break
+            
+            valves = ""
+            valvesState = self.dispatch.getValvesState()
+            if not valvesState is None :
+                valves = ';'.join(map(str, valvesState))
+                        
+            msg = "Status;%s;%d;%s;%s;|" % (RFIDState, userId, self.dispatch.needAlaModeReconfig(), valves)
+            debug( "Sending "+ msg )
+            self.arduino.write(msg)
+        #log message
+        elif ( reading[0] == "Log" ):
+           log(reading[1], "Arduino")
+        #debug message
+        elif ( reading[0] == "Debug" ):
+           debug(reading[1], "Arduino")
+        else:
+            debug( "unknown message: "+ msg )
+        
+        return True
+            
     def fakemonitor(self):
         running = True
-        debug( "listening to alamode" )
+        debug( "listening to Arduino" )
         updatecount = 0;
         pin = 10;
         
@@ -380,31 +439,10 @@ class FlowMonitor(object):
                 
                 if not msg:
                     continue
-                reading = msg.split(";")
-                if ( len(reading) < 2 ):
-                    debug( "alamode - Unknown message (length too short): "+ msg )
-                    continue
-                if ( reading[0] == "P" ):
-                    MCP_RFID = str(reading[1])
-                    MCP_PIN = str(reading[2])  
-                    POUR_COUNT = str(reading[3])   
-                    subprocess.call(["php", self.poursdir, "Pour", MCP_RFID, MCP_PIN, POUR_COUNT])
-                    self.dispatch.sendflowcount(MCP_RFID, MCP_PIN, POUR_COUNT)
-                elif ( reading[0] == "U" ):
-                    MCP_ADDR = int(reading[1])
-                    MCP_PIN = str(reading[2])
-                    POUR_COUNT = str(reading[3])
-                    self.dispatch.sendflowupdate(MCP_PIN, POUR_COUNT)
-                    updatecount = 0;
-                elif ( reading[0] == "K" ):
-                    MCP_ADDR = str(reading[1])
-                    MCP_PIN = str(reading[2])
-                    subprocess.call(["php", self.poursdir, "Kick", MCP_PIN])
-                    self.dispatch.sendkickupdate(MCP_PIN)
-                else:
-                    debug( "Unknown message: "+ msg )
+                if not self.processMsg(msg):
+                    return
         finally:
-            debug( "Closing serial connection to alamode..." )
+            debug( "Closing serial connection to Arduino..." )
             debug( "Exiting" )
 
     def tareRequest(self):
@@ -497,6 +535,7 @@ class RFIDCheckThread (threading.Thread):
                     
         except Exception, e:
             debug("RFID Reader: " +str(e))
+            debug(traceback.format_exc())
         finally:
             MIFAREReader.Close_MFRC522()
                 
@@ -520,7 +559,10 @@ class WritePinsThread (threading.Thread):
         part += 1
         COUNT = int(self.splitMsg[part])
         part += 1
-        while ( part-2 <= COUNT ):
+        while ( part-2 <= COUNT and COUNT > 0 ):
+            if not self.splitMsg[part]:
+                debug("Got empty pin for part "+str(part))
+                continue
             self.dispatch.updatepin(int(self.splitMsg[part]), MODE)
             part += 1
             if self.delay > 0:
@@ -553,11 +595,13 @@ class MotionDetectionPIRThread (threading.Thread):
                 time.sleep(100)
         except:
             log("Unable to run Motion Detection")
+            debug(traceback.format_exc())
             return
         
         
 class LoadCellCheckThread (threading.Thread):
-    def __init__(self, threadID, dispatch, updateDir, tapId = 1, commandPin = 7, responsePin = 8, delay=1, updateVariance=.01, unit="lb"):
+    def __init__(self, threadID, dispatch, updateDir, tapId = 1, commandPin = 7, responsePin = 8, delay=1, 
+                 updateVariance=.01, unit="lb", logger=None, scaleRatio=1, tareOffset=0):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.dispatch = dispatch
@@ -570,6 +614,7 @@ class LoadCellCheckThread (threading.Thread):
         self.unit = unit
         self.checkTare = False
         self.shutdown_required = False
+        self.hx711 = HX711(name=threadID, dout_pin=responsePin, pd_sck_pin=commandPin, logger=logger,scale_ratio=scaleRatio,tare_offset=tareOffset) 
         
     def exit(self):
         self.shutdown_required = True
@@ -578,13 +623,12 @@ class LoadCellCheckThread (threading.Thread):
         self.checkTare = checkTare
         
     def tare(self):
-        ##TODO determine how to tare the load cell
+        self.hx711.zero()
+        self.dispatch.setLoadCellTareOffset(self.hx711.get_offset())
         return
     
     def getWeight(self):
-        #TODO use the commandpin and responsepin to get the weight
-        #Dependant on the type of load cell that you have
-        return -1
+        return self.hx711.get_weight_mean(20)
     
     def run(self):
         log("Load Cell Checker " + self.threadID + " is Running")
@@ -604,8 +648,10 @@ class LoadCellCheckThread (threading.Thread):
                     subprocess.call(["php", self.updateDir + '/admin/updateKeg.php', str(self.tapId), str(weight), self.unit])
                     lastWeight = weight
                 time.sleep(self.delay)
-        except:
+        except Exception as ex:
             log("Unable to run Load Cell Checker")
+            debug(str(ex))
+            debug(traceback.format_exc())
             return
         
 #See https://www.homebrewtalk.com/forum/threads/web-accessible-temperature-logger-for-raspberry-pi.469523/ for source information
@@ -643,6 +689,8 @@ class OneWireTemperatureThread (threading.Thread):
         except:
             return None
     
+        if len(lines) <= 0:
+            return None
         # get the status from the end of line 1 
         status = lines[0][-4:-1]
     
@@ -666,8 +714,10 @@ class OneWireTemperatureThread (threading.Thread):
             # enable kernel modules
             os.system('sudo modprobe w1-gpio')
             os.system('sudo modprobe w1-therm')
-            
+            tempStatus = {}
             while not self.shutdown_required:
+                takenDate = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+                temps = []
                 # search for a device file that starts with 28
                 devicelist = glob.glob('/sys/bus/w1/devices/28*')
                 for probeDir in devicelist:
@@ -680,14 +730,95 @@ class OneWireTemperatureThread (threading.Thread):
                     #if temperature doesnt make sense try again 1 time
                     if temp == None or temp < self.bound_lo or temp > self.bound_hi:
                         temp = self.get_temp(device)
-                        
                     #if valid temp save it to the database
                     if temp != None and temp >= self.bound_lo and temp <= self.bound_hi:
-                        self.dispatch.saveTemp(probeName, temp, 'C')
-                        
+                        temps.append([probeName, temp, 'C', takenDate])
+                        if probeName not in tempStatus:
+                            debug("Adding " + probeName +" Temp[" + str(temp) + "] low:" + str(self.bound_lo) + " high:"+str(self.bound_hi) ) 
+                        tempStatus[probeName] = True
+                    elif tempStatus.get(probeName, False):
+                        tempStatus[probeName] = False
+                        debug("Not Adding " + probeName + " Temp[" + str(temp) + "] low:"+str(self.bound_lo) + " high:" + str(self.bound_hi) )
+                self.dispatch.saveTemps(temps)
+                
                 time.sleep(self.delay)
                 firstTime = False
         except Exception, e:
             log("Unable to Run 1Wire Temperature")
+            debug("1Wire Temperature: " +str(e))
+            debug(traceback.format_exc())
             return
             
+#Based on logic from bscuderi
+class MQTTListenerThread (threading.Thread):
+    def __init__(self, threadID, flowMonitor, host, port, user, password, live_interval=45, topics="rpints/pours"):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.flowMonitor = flowMonitor
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.live_interval = live_interval
+        self.topics = topics
+        self.shutdown_required = False
+    
+    def keepAlive(self):
+        self.shutdown_required = False
+    def exit(self):
+        self.shutdown_required = True
+        
+    def set_live_interval(self, delay):
+        self.live_interval = live_interval
+        
+    def run(self):
+        log("MQTT Listener Thread " + self.threadID + " is Running")
+        try:
+            # Initiate MQTT Client
+            self.mqttc = mqtt.Client()
+            
+            # Assign event callbacks
+            self.mqttc.on_message = self.on_message
+            self.mqttc.on_connect = self.on_connect
+            self.mqttc.on_subscribe = self.on_subscribe
+            
+            #user and [ass
+            self.mqttc.username_pw_set(username=self.user,password=self.password)
+            
+            # Connect with MQTT Broker
+            self.mqttc.connect(self.host, self.port, self.live_interval)
+            
+            # Continue monitoring the incoming messages for subscribed topic
+            while not self.shutdown_required:
+                self.mqttc.loop()
+        except Exception, e:
+            log("Unable to Run MQTT Listener")
+            debug("MQTT Listener: " +str(e))
+            return
+            
+    # Define on connect event function
+    # We shall subscribe to our Topic in this function
+    def on_connect(self, client, userdata, flags, rc):
+        debug("Connect on "+self.host)
+        try:
+            self.mqttc.subscribe(self.topics)
+        except Exception, e:
+            log("Unable to Run MQTT Listener")
+            debug("MQTT Listener: " +str(e))
+            debug(traceback.format_exc())
+    
+    def on_subscribe(self, client, userdata, mid, granted_qos):
+        debug("Subscribed to Topic: " + self.topics + " with QoS: " + str(granted_qos))
+        
+    # Define on_message event function.
+    # This function will be invoked every time,
+    # a new message arrives for the subscribed topic
+    def on_message(self, client, userdata, message):
+        debug("Recevied: " + str(message) + "FROM MQTT")
+        self.flowMonitor.processMsg(message.payload)
+
+    def write(self, msg):
+        self.mqttc.publish("rpints",msg)
+        
+    def read(self, numCharacters):
+        return ""

@@ -15,8 +15,11 @@ class Tap
 	private $_active;
 	private $_loadCellCmdPin;
 	private $_loadCellRspPin;
+	private $_loadCellScaleRatio;
+	private $_loadCellTareOffset;
 	private $_loadCellUnit;
 	private $_loadCellTareDate;
+	private $_plaatoAuthToken;
 	private $_createdDate; 
 	private $_modifiedDate; 
 
@@ -64,11 +67,20 @@ class Tap
 	public function get_loadCellRspPin(){ return $this->_loadCellRspPin; }
 	public function set_loadCellRspPin($_loadCellRspPin){ $this->_loadCellRspPin = $_loadCellRspPin; }
 	
+	public function get_loadCellScaleRatio(){ return $this->_loadCellScaleRatio; }
+	public function set_loadCellScaleRatio($_loadCellScaleRatio){ $this->_loadCellScaleRatio = $_loadCellScaleRatio; }
+	
+	public function get_loadCellTareOffset(){ return $this->_loadCellTareOffset; }
+	public function set_loadCellTareOffset($_loadCellTareOffset){ $this->_loadCellTareOffset = $_loadCellTareOffset; }
+	
 	public function get_loadCellUnit(){ return $this->_loadCellUnit; }
 	public function set_loadCellUnit($_loadCellUnit){ $this->_loadCellUnit = $_loadCellUnit; }
 	
 	public function get_loadCellTareDate(){ return $this->_loadCellTareDate; }
 	public function set_loadCellTareDate($_loadCellTareDate){ $this->_loadCellTareDate = $_loadCellTareDate; }
+	
+	public function get_plaatoAuthToken(){ return $this->_plaatoAuthToken; }
+	public function set_plaatoAuthToken($_plaatoAuthToken){ $this->_plaatoAuthToken = $_plaatoAuthToken; }
 		
 	public function get_createdDate(){ return $this->_createdDate; }
 	public function set_createdDate($_createdDate){ $this->_createdDate = $_createdDate; }
@@ -147,6 +159,16 @@ class Tap
             $this->set_loadCellRspPin($postArr['loadCellRspPin']);
         else
             $this->set_loadCellRspPin(null);
+        
+        if( isset($postArr['loadCellScaleRatio']) )
+            $this->set_loadCellScaleRatio($postArr['loadCellScaleRatio']);
+        else
+            $this->set_loadCellScaleRatio(null);
+        
+        if( isset($postArr['loadCellTareOffset']) )
+            $this->set_loadCellTareOffset($postArr['loadCellTareOffset']);
+        else
+            $this->set_loadCellTareOffset(null);
 		            
         if( isset($postArr['loadCellUnit']) )
             $this->set_loadCellUnit($postArr['loadCellUnit']);
@@ -163,6 +185,11 @@ class Tap
 		else
 			$this->set_createdDate(null);
 			
+		if( isset($postArr['plaatoAuthToken']) )
+		    $this->set_plaatoAuthToken($postArr['plaatoAuthToken']);
+		else
+		    $this->set_plaatoAuthToken(null);
+		
 		if( isset($postArr['modifiedDate']) )
 			$this->set_modifiedDate($postArr['modifiedDate']);
 		else

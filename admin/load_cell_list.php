@@ -2,8 +2,9 @@
 require_once __DIR__.'/header.php';
 $htmlHelper = new HtmlHelper();
 $tapManager = new TapManager();
+$kegManager = new KegManager();
 
-$config = getAllConfigs();
+//$config = getAllConfigs();
 
 $reconfig = false;
 if (isset ( $_POST ['tare'] )) {
@@ -12,7 +13,7 @@ if (isset ( $_POST ['tare'] )) {
 }
 if (isset ( $_POST ['save'] )) {
 	$error = false;
-
+	
 	$ii = 0;
 	while(isset($_POST ['id'][$ii]))
 	{
@@ -21,7 +22,7 @@ if (isset ( $_POST ['save'] )) {
 	        $ii++;
 	        continue;
 	    }
-	    if(!$tapManager->saveTapLoadCellInfo($_POST ['id'][$ii], $_POST['loadCellCmdPin'][$ii], $_POST['loadCellRspPin'][$ii], $_POST['loadCellUnit'][$ii]))$error=true;
+	    if(!$tapManager->saveTapLoadCellInfo($_POST ['id'][$ii], $_POST['loadCellCmdPin'][$ii], $_POST['loadCellRspPin'][$ii], $_POST['loadCellScaleRatio'][$ii], $_POST['loadCellTareOffset'][$ii], $_POST['loadCellUnit'][$ii]))$error=true;
 	    $ii++;
 	    $reconfig = true;
 	}
@@ -74,10 +75,10 @@ include 'top_menu.php';
             <strong>No Active Load Cells Found</strong>
             <br>
             <?php } ?>
-            <h1><strong>
+<!--             <h1><strong>
             This is a place holder for anyone who wants to use load cells. (assuming 2 pin communication)<br/>
             python/FlowMonitor.py:LoadCellCheckThread:getWeight needs to be updated<br/></strong></h1>
-            Originally designed for hx711 load cells.<br/>            
+            Originally designed for hx711 load cells.<br/>   -->          
 
 			<form method="POST" id="loadCells-form">
                 <table style="width:500px" id="tableList">
@@ -86,8 +87,11 @@ include 'top_menu.php';
                             <th style="vertical-align: middle;">Tap</th>
                             <th style="vertical-align: middle;">Command Pin</th>
                             <th style="vertical-align: middle;">Response Pin</th>
+                            <th style="vertical-align: middle;">Scale Ratio</th>
+                            <th style="vertical-align: middle;">Offset</th>
                             <th style="width:200px;vertical-align: middle;">Unit</th>
                             <th style="width:50px; vertical-align: middle;">Tare Date</th>
+                            <th style="width:50px; vertical-align: middle;">Current Weight</th>
                             <th>
                         </tr>
                     </thead>
@@ -112,6 +116,12 @@ include 'top_menu.php';
                                         <input type="text" id="loadCellRspPin<?php echo $tap->get_id();?>" class="smallbox" name="loadCellRspPin[]" value="<?php echo $tap->get_loadCellRspPin() ?>" />
                                     </td>
                                     <td style="vertical-align: middle;">
+                                        <input type="text" id="loadCellScaleRatio<?php echo $tap->get_id();?>" class="smallbox" name="loadCellScaleRatio[]" value="<?php echo $tap->get_loadCellScaleRatio() ?>" />
+                                    </td>
+                                    <td style="vertical-align: middle;">
+                                        <input type="text" id="loadCellTareOffset<?php echo $tap->get_id();?>" class="smallbox" name="loadCellTareOffset[]" value="<?php echo $tap->get_loadCellTareOffset() ?>" />
+                                    </td>
+                                    <td style="vertical-align: middle;">
                                     <select name="loadCellUnit[]">
                                     <?php
                                         $result = getConfigByName(ConfigNames::DisplayUnitWeight);
@@ -127,8 +137,23 @@ include 'top_menu.php';
                                         <span><?php echo $tap->get_loadCellTareDate() ?></span>
                                     </td>
                                     <td style="vertical-align: middle;">
+                                    	<span>
+                                    	<?php
+                                        	$keg = null;
+                                        	if( $tap->get_kegId() > 0 ) $keg = $kegManager->GetByID($tap->get_kegId());
+                                    	    if( $keg ){
+                                    	        echo $keg->get_weight();
+                                    	    }else{
+                                    	        echo "No Keg";
+                                    	    }
+                                    	?>
+                                    	</span>
+                                    </td>
+                                    <td style="vertical-align: middle;">
                                         <?php if( $tap->get_loadCellCmdPin() != '' ) { ?>
-                                            <button name="tare[]" id="tare echo $tap->get_id();?>" type="button" class="btn" style="white-space:nowrap;" value="1" onClick="tare( <?php echo $tap->get_id()?>)">Tare</button>
+                                            <button name="tare[]" id="tare<?php echo $tap->get_id();?>" type="button" class="btn" style="white-space:nowrap;" value="1" 
+                                            onClick='tare(this, <?php echo $tap->get_id()?>); $(loadCellTareOffset<?php echo $tap->get_id()?>).attr("disabled", "disabled");'>Tare</button>
+                                            <span id="tare<?php echo $tap->get_id();?>Success" style="display:none; color: #8EA534;"> (Success<br>Refresh to see Offset)</span>
                                         <?php } ?>
                                     </td>
                                 </tr>
@@ -204,12 +229,14 @@ include 'scripts.php';
 					<?php echo $comma; ?>loadCellCmd<?php echo $tap->get_id(); ?>: { number: true, min: 1, integer: true   }
 					<?php $comma = ","; ?>
 					<?php echo $comma; ?>loadCellRsp<?php echo $tap->get_id(); ?>: { number: true, min: 1, integer: true  }
+					<?php echo $comma; ?>loadScaleRatio<?php echo $tap->get_id(); ?>: { number: true, min: 1, integer: true  }
+					<?php echo $comma; ?>loadTareOffset<?php echo $tap->get_id(); ?>: { number: true, min: 1, integer: true  }
 			     <?php } ?> 
 				}
 			});		
 		});
 
-		function tare(tapId){
+		function tare(button, tapId){
 			var data
 			data = { "tare" : tapId }
 			
@@ -218,7 +245,11 @@ include 'scripts.php';
 	                   type: "POST",
 	                   url: "load_cell_list.php",
 	                   data: data,// data to send to above script page if any
-	                   cache: false
+	                   cache: false,
+	                   success: function(response)
+	                   {
+	                	   document.getElementById(button.id + 'Success').style.display = ""; 
+	                   }
 	             });
 	  	}
 </script>

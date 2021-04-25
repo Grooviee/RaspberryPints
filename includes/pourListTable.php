@@ -67,14 +67,14 @@
 				<?php if($config[ConfigNames::ShowPourBreweryImages]){ ?>
 					<td style="<?php if($beerColSpan > 1){ echo 'border-left: none;'; } ?>" class="poursbreweryimg" >
 					<?php if(null !== $pour->get_breweryImageUrl()){ ?>
-						<img style="border:0;width:100%" src="<?php echo $pour->get_breweryImageUrl(); ?>" />
+						<img style="border:0;width:100px" src="<?php echo $pour->get_breweryImageUrl(); ?>" />
 					<?php } ?>
 					</td>
 				<?php } ?>
 						
 				<?php if($config[ConfigNames::ShowPourBeerImages]){ ?>
                     <td style="<?php if($beerColSpan > 1){ echo 'border-left: none;'; } ?>" class="poursbeerimg">	
-                    <?php beerImg($config, $pour->get_beerUntID()); ?>
+                    <?php beerImg($config, $pour->get_beerUntID(), $pour->get_beerId()); ?>
                     </td>
                 <?php } ?>
 					

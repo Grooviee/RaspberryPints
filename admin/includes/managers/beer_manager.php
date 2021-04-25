@@ -4,6 +4,7 @@ require_once __DIR__.'/tap_manager.php';
 require_once __DIR__.'/fermentable_manager.php';
 require_once __DIR__.'/hop_manager.php';
 require_once __DIR__.'/yeast_manager.php';
+require_once __DIR__.'/accolade_manager.php';
 require_once __DIR__.'/../models/beer.php';
 
 class BeerManager extends Manager{
@@ -12,7 +13,7 @@ class BeerManager extends Manager{
 		return ["id"];
 	}
 	protected function getColumns(){
-		return ["name", "untID", "beerStyleId", "breweryId", "notes", "abv", "og", "ogUnit", "fg", "fgUnit", "srm", "ibu", "rating", "active"];
+		return ["name", "untID", "beerStyleId", "breweryId", "notes", "abv", "og", "ogUnit", "fg", "fgUnit", "srm", "ibu", "rating", "active", "containerId"];
 	}
 	protected function getTableName(){
 		return "beers";

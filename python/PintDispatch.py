@@ -26,6 +26,7 @@ from sys import stdin
 from mod_pywebsocket.standalone import WebSocketServer
 from mod_pywebsocket.standalone import _parse_args_and_config
 from mod_pywebsocket.standalone import _configure_logging
+import subprocess
 
 from Config import config
 
@@ -49,13 +50,83 @@ MCAST_PORT = 0xBEE2
 MCAST_RETRY_ATTEMPTS = 10
 MCAST_RETRY_SLEEP_SEC=5
 
-def debug(msg):
-    if(config['dispatch.debug']):
-        log(msg)
+def debug(msg, process="PintDispatch", logDB=True):
+    logger = Logger()
+    logger.debug(msg, process, logDB)
                  
-def log(msg):
-    print datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + " RPINTS: " + msg
-    sys.stdout.flush() 
+def log(msg, process="PintDispatch", isDebug=False, logDB=True):
+    logger = Logger()
+    logger.log(msg, process, isDebug, logDB)
+   
+def parseConnFile():
+    connFileName = ADMIN_INCLUDES_DIR + "/conn.php"
+    connDict = dict()
+    with open(connFileName) as connFile:
+        for line in connFile:
+            instructions = line.split(";")
+            if(len(instructions) < 1):
+                continue
+            php = instructions[0].strip()
+            php = php.strip("$")
+            keyValue = php.split("=")
+            if(len(keyValue) != 2):
+                continue
+            connDict[keyValue[0]] = keyValue[1].strip("\"")
+    return connDict
+dbArgs=parseConnFile()
+def connectDB():
+    while True:
+        try:
+            con = mdb.connect(dbArgs['host'],dbArgs['username'],dbArgs['password'],dbArgs['db_name'])
+            break
+        except:
+            debug(msg="Database Connection Lost, retrying", process="PintDispatch", logDB=False)
+            time.sleep(1)
+        
+    return con
+
+loggerLastClean = None
+class Logger ():
+    def debug(self, msg, process="PintDispatch", logDB=True):
+        if(config['dispatch.debug']):
+            self.log(msg, process, True, logDB)
+                     
+    def log(self, msg, process="PintDispatch", isDebug=False, logDB=True):
+        print datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + " RPINTS: " + msg 
+        sys.stdout.flush() 
+        if logDB:
+            self.logDB(msg, process, isDebug)
+        
+    def logDB(self, msg, process="PintDispatch", isDebug=False):
+        max_row_check = 2
+        category = ("I" if not isDebug else "D")
+        selectLastSql = "SELECT id, category, text, occurances FROM log WHERE process = '"+process+"' ORDER BY id DESC LIMIT "+str(max_row_check)
+        updateLastSql = "UPDATE log SET occurances = occurances + 1, modifiedDate = NOW() WHERE id = "
+        insertLogSql = " "
+        insertLogSql += ""
+        con = connectDB()
+        cursor = con.cursor(mdb.cursors.DictCursor)
+        cursor.execute(selectLastSql)
+        rows = cursor.fetchall()
+        ii = 0
+        while( ii < len(rows) ):
+            if( str(rows[ii]['text']) == msg and str(rows[ii]['category']) == category):
+                if( rows[ii]['occurances'] < 999999999 ):
+                    result = cursor.execute(updateLastSql + str(rows[ii]['id']))   
+                    break;
+            ii = ii + 1   
+        #if we exited the loop normally then we didnt find a record to update occurences add this to the database
+        if ii >= len(rows):
+            result = cursor.execute("INSERT INTO log (process, category, text, createdDate, modifiedDate) VALUES(%s, %s, %s ,NOW(),NOW());", (process, category, msg,))
+        self.cleanLog(cursor)     
+        con.commit()
+        con.close()
+        
+    def cleanLog(self, cursor):
+        global loggerLastClean
+        if loggerLastClean is None or loggerLastClean != datetime.date.today():
+            cursor.execute("DELETE FROM log WHERE modifiedDate <= DATE_SUB(CURDATE(), INTERVAL 7 DAY)")
+            loggerLastClean = datetime.date.today()
     
 class CommandTCPHandler(SocketServer.StreamRequestHandler):
 
@@ -103,6 +174,12 @@ class CommandTCPHandler(SocketServer.StreamRequestHandler):
             if ( reading[1] == "restartservice" ):
                 debug("Requesting Reset of Service")
                 self.server.pintdispatch.restartService()
+            if ( reading[1] == "upgrade" ):
+                debug("Upgrading Rpints")
+                self.server.pintdispatch.upgrade("")
+            if ( reading[1] == "upgradeForce" ):
+                debug("Upgrading Rpints")
+                self.server.pintdispatch.upgrade("force")
         
         self.wfile.write("RPACK\n")
 
@@ -156,31 +233,10 @@ class PintDispatch(object):
         self.commandserver = CommandTCPServer(('localhost', MCAST_PORT), CommandTCPHandler)
         self.commandserver.pintdispatch = self
         self.fanControl = FanControlThread("fanControl1", self)
-        self.flowmonitor = FlowMonitor(self)
-    
-    def parseConnFile(self):
-        connFileName = ADMIN_INCLUDES_DIR + "/conn.php"
-        connDict = dict()
-        with open(connFileName) as connFile:
-            for line in connFile:
-                instructions = line.split(";")
-                if(len(instructions) < 1):
-                    continue
-                php = instructions[0].strip()
-                php = php.strip("$")
-                keyValue = php.split("=")
-                if(len(keyValue) != 2):
-                    continue
-                connDict[keyValue[0]] = keyValue[1].strip("\"")
-        return connDict
-    
-    def connectDB(self):
-        cp = self.parseConnFile()
-        con = mdb.connect(cp['host'],cp['username'],cp['password'],cp['db_name'])
-        return con
-    
+        self.flowmonitor = FlowMonitor(self, Logger())
+        
     def getConfig(self):
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         cursor.execute("SELECT * from config")
         rows = cursor.fetchall()
@@ -188,7 +244,7 @@ class PintDispatch(object):
         return rows
     
     def getConfigValueByName(self, name):
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         cursor.execute("SELECT configValue from config WHERE configName='"+name+"'")
         rows = cursor.fetchall()
@@ -198,7 +254,7 @@ class PintDispatch(object):
         return rows[0]['configValue']
 
     def getTapConfig(self):
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         cursor.execute("SELECT tc.tapId,tc.flowPin,tc.valvePin,tc.valveOn FROM tapconfig tc LEFT JOIN taps t ON tc.tapId = t.id WHERE t.active = 1 ORDER BY tc.tapId")
         rows = cursor.fetchall()
@@ -206,7 +262,7 @@ class PintDispatch(object):
         return rows
     
     def getRFIDReaders(self):
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         cursor.execute("SELECT * from rfidReaders ORDER BY priority")
         rows = cursor.fetchall()
@@ -214,7 +270,7 @@ class PintDispatch(object):
         return rows
     
     def getMotionDetectors(self):
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         cursor.execute("SELECT * from motionDetectors ORDER BY priority")
         rows = cursor.fetchall()
@@ -222,15 +278,15 @@ class PintDispatch(object):
         return rows
     
     def getLoadCellConfig(self):
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
-        cursor.execute("SELECT tapId,loadCellCmdPin,loadCellRspPin,loadCellUnit FROM tapconfig WHERE loadCellCmdPin IS NOT NULL ORDER BY tapId")
+        cursor.execute("SELECT tapId,loadCellCmdPin,loadCellRspPin,loadCellUnit,loadCellScaleRatio,loadCellTareOffset FROM tapconfig WHERE loadCellCmdPin IS NOT NULL ORDER BY tapId")
         rows = cursor.fetchall()
         con.close()
         return rows
     
     def getTareRequest(self, tapId):
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         cursor.execute("SELECT tapId,loadCellTareReq FROM tapconfig WHERE tapId = " + str(tapId))
         rows = cursor.fetchall()
@@ -247,7 +303,16 @@ class PintDispatch(object):
         if not tareRequested:
             sql = sql + ",loadCellTareDate=NOW()"
         sql = sql + " WHERE tapId = " + str(tapId)
-        con = self.connectDB()
+        con = connectDB()
+        cursor = con.cursor(mdb.cursors.DictCursor)
+        result = cursor.execute(sql)
+        con.commit()
+        con.close()
+        
+    def setLoadCellTareOffset(self, tapId, offset):
+        sql = "UPDATE tapconfig SET loadCellTareOffset="+str(offset)
+        sql = sql + " WHERE tapId = " + str(tapId)
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         result = cursor.execute(sql)
         con.commit()
@@ -255,19 +320,35 @@ class PintDispatch(object):
         
     def addTempProbeAsNeeded(self, probe):
         sql = "SELECT * FROM tempProbes WHERE name='"+probe+"';"
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         result = cursor.execute(sql)
+        rows = cursor.fetchall()
         if(cursor.rowcount <= 0):
             cursor.execute("INSERT INTO tempProbes (name, type) VALUES('"+probe+"', 0)")
+        else:
+            if(rows[0]['active'] == 0) :
+                updateCursor = con.cursor(mdb.cursors.DictCursor)
+                updateCursor.execute("UPDATE tempProbes SET active=1 WHERE name ='" + probe+"'")           
         con.commit()
         con.close()        
-    def saveTemp(self, probe, temp, tempUnit):
+    def saveTemp(self, probe, temp, tempUnit, takenDate):
         insertLogSql = "INSERT INTO tempLog (probe, temp, tempUnit, takenDate) "
-        insertLogSql += "VALUES('"+probe+"',"+str(temp)+"+ COALESCE((SELECT manualAdj FROM tempProbes WHERE name = '"+probe+"'), 0), '"+str(tempUnit)+"', NOW());"
-        con = self.connectDB()
+        insertLogSql += "VALUES('"+probe+"',"+str(temp)+"+ COALESCE((SELECT manualAdj FROM tempProbes WHERE name = '"+probe+"'), 0), '"+str(tempUnit)+"', '"+takenDate+"');"
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         result = cursor.execute(insertLogSql)
+        con.commit()
+        con.close()
+        self.archiveTemp()
+        
+    def saveTemps(self, temps):
+        con = connectDB()
+        cursor = con.cursor(mdb.cursors.DictCursor)
+        for temp in temps:
+            insertLogSql = "INSERT INTO tempLog (probe, temp, tempUnit, takenDate) "
+            insertLogSql += "VALUES('"+temp[0]+"',"+str(temp[1])+"+ COALESCE((SELECT manualAdj FROM tempProbes WHERE name = '"+temp[0]+"'), 0), '"+str(temp[2])+"', '"+temp[3]+"');"
+            result = cursor.execute(insertLogSql)
         con.commit()
         con.close()
         self.archiveTemp()
@@ -298,7 +379,7 @@ class PintDispatch(object):
         deleteSQL = """DELETE FROM tempLog 
                 WHERE probe != 'History' AND
                         takenDate < CAST(DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 1 MONTH) ,'%Y-%m-01') as DATE) ;"""
-        con = self.connectDB()
+        con = connectDB()
         cursor = con.cursor(mdb.cursors.DictCursor)
         result = cursor.execute(insertLogSql)
         result = cursor.execute(deleteSQL)
@@ -370,7 +451,7 @@ class PintDispatch(object):
                 if(config['dispatch.debugMonitoring']):
                     self.flowmonitor.fakemonitor()
                 else:
-                    self.flowmonitor.monitor()
+                    self.flowmonitor.monitor(self.useOption("useFlowMeter"))
             except Exception, e:
                 log("serial connection stopped...")
                 debug( str(e) )
@@ -408,13 +489,10 @@ class PintDispatch(object):
         t.setDaemon(True)
         t.start()
 
-        if self.useOption("useFlowMeter"):
-            log("starting tap flow meters...")
-            t = threading.Thread(target=self.spawn_flowmonitor)
-            t.setDaemon(True)
-            t.start()
-        else:
-            log("tap flow meters not enabled")
+        log("starting device monitors...")
+        t = threading.Thread(target=self.spawn_flowmonitor)
+        t.setDaemon(True)
+        t.start()
             
         log("starting command server")
         t = threading.Thread(target=self.commandserver.serve_forever)
@@ -491,7 +569,7 @@ class PintDispatch(object):
                 GPIO.output(pin, GPIO.HIGH)
                 
             sql = "UPDATE tapconfig SET valvePinState=" + str(value) + " WHERE valvePin =" +  str(-1*pin)
-            con = self.connectDB()
+            con = connectDB()
             cursor = con.cursor(mdb.cursors.DictCursor)
             result = cursor.execute(sql)
             con.commit()
@@ -584,7 +662,17 @@ class PintDispatch(object):
     def restartService(self,):
         log("Restarting Service")
         os.system('sudo /etc/init.d/flowmon restart')
-            
+        
+    def upgrade(self,varient="", branch_to_use="", tag=""):
+        log("Upgrading RPints Service")
+        
+        cmds = {}
+        if varient == "":
+            subprocess.call(""+PINTS_DIR+"/util/installRaspberryPints --u --i "+PINTS_DIR, shell=True)
+
+        elif varient == "force":
+            subprocess.call(""+PINTS_DIR+"/util/installRaspberryPints --u --f --i "+PINTS_DIR, shell=True)
+
 class FanControlThread (threading.Thread):
     restart = False
     def __init__(self, threadID, dispatch):

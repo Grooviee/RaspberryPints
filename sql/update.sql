@@ -29,10 +29,10 @@ BEGIN
             SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
             WHERE
               (lower(table_name) = lower(tablename))
-              AND (lower(table_schema) = lower(dbname))
+              AND (table_schema = dbname)
               AND (lower(column_name) = lower(columnname))
           ) > 0,
-          "SELECT 1",
+          CONCAT("select '",dbname,"','",tableName,"','",columnName,"','",columnType,"','exists'"),
           CONCAT("ALTER TABLE ", tablename, " ADD ", columnname, " ", columnType)
         )
     );
@@ -196,6 +196,8 @@ CALL addColumnIfNotExist(DATABASE(), 'kegs', 'keggingTemp', 'decimal(6, 2)' );
 CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'loadCellCmdPin', 'int(11)' );
 CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'loadCellRspPin', 'int(11)' );
 CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'loadCellTareReq', 'int(11)' );
+CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'loadCellScaleRatio', 'int(11)' );
+CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'loadCellTareOffset', 'int(11)' );
 CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'loadCellTareDate', 'TIMESTAMP NULL' );
 CALL addColumnIfNotExist(DATABASE(), 'kegTypes', 'emptyWeight', 'decimal(11, 4)' );
 CALL addColumnIfNotExist(DATABASE(), 'kegs', 'emptyWeight', 'decimal(11, 4)' );
@@ -217,30 +219,6 @@ UPDATE `kegTypes` SET emptyWeight =  '0'       WHERE displayName = 'Cask (kilder
 UPDATE `kegTypes` SET emptyWeight =  '0'       WHERE displayName = 'Cask (barrel)' AND emptyWeight IS NULL;
 UPDATE `kegTypes` SET emptyWeight =  '0'       WHERE displayName = 'Cask (hogshead)' AND emptyWeight IS NULL;
 
-CREATE OR REPLACE VIEW `vwKegs` 
-AS
- SELECT 
-    k.id,
-    k.label,
-    k.kegTypeId,
-    k.make,
-    k.model,
-    k.serial,
-    k.stampedOwner,
-    k.stampedLoc,
-    k.notes,
-    k.kegStatusCode,
-    k.weight,
-    k.beerId,
-    k.onTapId,
-    t.tapNumber,
-    k.active,
-    CASE WHEN (k.emptyWeight IS NULL OR k.emptyWeight = '' OR k.emptyWeight = 0) AND kt.emptyWeight IS NOT NULL THEN kt.emptyWeight ELSE k.emptyWeight END AS emptyWeight,
-    CASE WHEN (k.maxVolume IS NULL OR k.maxVolume = '' OR k.maxVolume = 0) AND kt.maxAmount IS NOT NULL THEN kt.maxAmount ELSE k.maxVolume END AS maxVolume
- FROM kegs k LEFT JOIN kegTypes kt 
-        ON k.kegTypeId = kt.id
-      LEFT JOIN taps t 
-        ON k.onTapId = t.id;
 
 CREATE OR REPLACE VIEW `vwTaps` 
 AS
@@ -339,97 +317,12 @@ EXECUTE alterIfNotExists;
 DEALLOCATE PREPARE alterIfNotExists;
 
 
-CREATE OR REPLACE VIEW vwGetActiveTaps
-AS
-
-SELECT
-	t.id,
-	b.name,
-	b.untID,
-	bs.name as 'style',
-	br.name as 'breweryName',
-	br.imageUrl as 'breweryImageUrl',
-	b.rating,
-	b.notes,
-	b.abv,
-	b.og as og,
-	b.fg as fg,
-	b.srm as srm,
-	b.ibu as ibu,
-	k.startAmount,
-	(IFNULL(k.startAmount,0) - IFNULL(k.currentAmount,0)) as amountPoured,
-    IFNULL(k.currentAmount , 0)as remainAmount,
-	t.tapNumber,
-	t.tapRgba,
-    tc.flowPin as pinId,
-	s.rgb as srmRgb,
-	tc.valveOn,
-	tc.valvePinState
-FROM taps t
-	LEFT JOIN tapconfig tc ON t.id = tc.tapId
-	LEFT JOIN kegs k ON k.id = t.kegId
-	LEFT JOIN beers b ON b.id = k.beerId
-	LEFT JOIN beerStyles bs ON bs.id = b.beerStyleId
-	LEFT JOIN breweries br ON br.id = b.breweryId
-	LEFT JOIN srmRgb s ON s.srm = b.srm
-WHERE t.active = true
-ORDER BY t.id;
-
-CREATE OR REPLACE VIEW `vwKegs` 
-AS
- SELECT 
-    k.id,
-    k.label,
-    k.kegTypeId,
-    k.make,
-    k.model,
-    k.serial,
-    k.stampedOwner,
-    k.stampedLoc,
-    k.notes,
-    k.kegStatusCode,
-    k.weight,
-    k.beerId,
-    k.onTapId,
-    t.tapNumber,
-    k.active,
-    CASE WHEN (k.emptyWeight IS NULL OR k.emptyWeight = '' OR k.emptyWeight = 0) AND kt.emptyWeight IS NOT NULL THEN kt.emptyWeight ELSE k.emptyWeight END AS emptyWeight,
-    CASE WHEN (k.maxVolume IS NULL OR k.maxVolume = '' OR k.maxVolume = 0) AND kt.maxAmount IS NOT NULL THEN kt.maxAmount ELSE k.maxVolume END AS maxVolume,
-    k.startAmount,
-    k.currentAmount,
-    k.fermentationPSI,
-    k.keggingTemp,
-    k.modifiedDate,
-    k.createdDate
- FROM kegs k LEFT JOIN kegTypes kt 
-        ON k.kegTypeId = kt.id
-      LEFT JOIN taps t 
-        ON k.onTapId = t.id;
 
 INSERT IGNORE INTO `config` (`configName`, `configValue`, `displayName`, `showOnPanel`, `createdDate`, `modifiedDate`) VALUES
 ( 'allowSamplePour', '1', 'Allow Sample Pour from List', '1', NOW(), NOW() );
 
 INSERT IGNORE INTO `config` (`configName`, `configValue`, `displayName`, `showOnPanel`, `createdDate`, `modifiedDate`) VALUES
 ('restartFanAfterPour', '1', 'Restart Fan After pour', 0, NOW(), NOW() );
-
-
-CREATE OR REPLACE VIEW `vwPours`
-AS
-SELECT 
-	p.*, 
-	t.tapNumber, 
-	t.tapRgba,
-	b.name AS beerName, 
-	b.untID AS beerUntID, 
-  bs.name as beerStyle,
-	br.imageUrl AS breweryImageUrl, 
-	COALESCE(u.userName, '') as userName
-FROM pours p 
-	LEFT JOIN taps t ON (p.tapId = t.id) 
-	LEFT JOIN beers b ON (p.beerId = b.id) 
-	LEFT JOIN breweries br ON (b.breweryId = br.id) 
-	LEFT JOIN users u ON (p.userId = u.id)
-	LEFT JOIN beerStyles bs ON bs.id = b.beerStyleId;
 
   update config set showOnPanel = '1' WHERE configName = 'showPourDate';
 
@@ -485,8 +378,6 @@ ALTER TABLE tempLog CHANGE COLUMN `humidity` `humidity` decimal(6,2) NULL ;
 
 CALL addColumnIfNotExist(DATABASE(), 'config', 'validation', 'varchar(65)' );
 
-
-DELETE FROM config where configName like 'displayUnit%';
 
 INSERT IGNORE INTO `config` (`configName`, `configValue`, `displayName`, `showOnPanel`, `validation`, `createdDate`, `modifiedDate`) VALUES
 ( 'displayUnitVolume', 'oz', 'Volume Units', '0', 'Imperial;oz|Metric;ml', NOW(), NOW() ),
@@ -551,46 +442,8 @@ AS
  FROM taps t 
  LEFT JOIN tapconfig tc ON (t.id = tc.tapId) 
  LEFT JOIN kegs k ON (t.kegId = k.id);
-
-CREATE OR REPLACE VIEW `vwKegs` 
-AS
- SELECT 
-    k.id,
-    k.label,
-    k.kegTypeId,
-    k.make,
-    k.model,
-    k.serial,
-    k.stampedOwner,
-    k.stampedLoc,
-    k.notes,
-    k.kegStatusCode,
-    k.weight,
-    k.weightUnit,
-    k.beerId,
-    k.onTapId,
-    t.tapNumber,
-    k.active,
-    CASE WHEN (k.emptyWeight IS NULL OR k.emptyWeight = '' OR k.emptyWeight = 0) AND kt.emptyWeight IS NOT NULL THEN kt.emptyWeight ELSE k.emptyWeight END AS emptyWeight,
-    CASE WHEN (k.emptyWeight IS NULL OR k.emptyWeight = '' OR k.emptyWeight = 0) AND kt.emptyWeight IS NOT NULL THEN kt.emptyWeightUnit ELSE k.emptyWeightUnit END AS emptyWeightUnit,
-    CASE WHEN (k.maxVolume IS NULL OR k.maxVolume = '' OR k.maxVolume = 0) AND kt.maxAmount IS NOT NULL THEN kt.maxAmount ELSE k.maxVolume END AS maxVolume,
-    CASE WHEN (k.maxVolume IS NULL OR k.maxVolume = '' OR k.maxVolume = 0) AND kt.maxAmount IS NOT NULL THEN kt.maxAmountUnit ELSE k.maxVolumeUnit END AS maxVolumeUnit,
-    k.startAmount,
-    k.startAmountUnit,
-    k.currentAmount,
-    k.currentAmountUnit,
-    k.fermentationPSI,
-    k.fermentationPSIUnit,
-    k.keggingTemp,
-    k.keggingTempUnit,
-    k.modifiedDate,
-    k.createdDate
- FROM kegs k LEFT JOIN kegTypes kt 
-        ON k.kegTypeId = kt.id
-      LEFT JOIN taps t 
-        ON k.onTapId = t.id;
-
         
+
 CREATE OR REPLACE VIEW `vwPours`
 AS
 SELECT 
@@ -599,7 +452,7 @@ SELECT
 	t.tapRgba,
 	b.name AS beerName, 
 	b.untID AS beerUntID, 
-  bs.name as beerStyle,
+        bs.name as beerStyle,
 	br.imageUrl AS breweryImageUrl, 
 	COALESCE(u.userName, '') as userName
 FROM pours p 
@@ -610,51 +463,12 @@ FROM pours p
 	LEFT JOIN beerStyles bs ON bs.id = b.beerStyleId;
 	
 	
-CREATE OR REPLACE VIEW vwGetActiveTaps
-AS
-
-SELECT
-	t.id,
-	b.name,
-	b.untID,
-	bs.name as 'style',
-	br.name as 'breweryName',
-	br.imageUrl as 'breweryImageUrl',
-	b.rating,
-	b.notes,
-	b.abv,
-	b.og as og,
-	b.ogUnit as ogUnit,
-	b.fg as fg,
-	b.fgUnit as fgUnit,
-	b.srm as srm,
-	b.ibu as ibu,
-	IFNULL(k.startAmount, 0)        as startAmount,
-	IFNULL(k.startAmountUnit, '')   as startAmountUnit,
-    IFNULL(k.currentAmount, 0)      as remainAmount,
-    IFNULL(k.currentAmountUnit, '') as remainAmountUnit,
-	t.tapNumber,
-	t.tapRgba,
-    tc.flowPin as pinId,
-	s.rgb as srmRgb,
-	tc.valveOn,
-	tc.valvePinState
-FROM taps t
-	LEFT JOIN tapconfig tc ON t.id = tc.tapId
-	LEFT JOIN kegs k ON k.id = t.kegId
-	LEFT JOIN beers b ON b.id = k.beerId
-	LEFT JOIN beerStyles bs ON bs.id = b.beerStyleId
-	LEFT JOIN breweries br ON br.id = b.breweryId
-	LEFT JOIN srmRgb s ON s.srm = b.srm
-WHERE t.active = true
-ORDER BY t.id;
-	
-
 CREATE OR REPLACE VIEW vwGetFilledBottles
 AS
 
 SELECT
 	t.id,
+	b.id as 'beerId',
 	b.name,
 	b.untID,
 	bs.name as 'style',
@@ -679,7 +493,8 @@ SELECT
     NULL as pinId,
 	s.rgb as srmRgb,
 	1 as valveOn,
-	1 as valvePinState
+	1 as valvePinState,
+    NULL
 FROM bottles t
 	LEFT JOIN beers b ON b.id = t.beerId
 	LEFT JOIN bottleTypes bt ON bt.id = t.bottleTypeId
@@ -756,4 +571,343 @@ CREATE TABLE IF NOT EXISTS `log` (
 	
 	PRIMARY KEY (`id`)
 ) ENGINE=InnoDB	DEFAULT CHARSET=latin1;
-							
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'saveNonUserRfids', '1', 'If unknown RFID tags should be saved into the database', '1', NOW(), NOW() );
+
+INSERT IGNORE INTO `config` (`configName`, `configValue`, `displayName`, `showOnPanel`, `createdDate`, `modifiedDate`) VALUES
+('TapNumColNum', '1', 'Column number for Tap Number', 1, NOW(), NOW() ),
+('SrmColNum', '2', 'Column number for SRM', 1, NOW(), NOW() ),
+('IbuColNum', '3', 'Column number for IBU', 1, NOW(), NOW() ),
+('BeerInfoColNum', '4', 'Column number for Beer Info', 1, NOW(), NOW() ),
+('AbvColNum', '5', 'Column number for ABV', 1, NOW(), NOW() ),
+('KegColNum', '6', 'Column number for Keg', 1, NOW(), NOW() );
+
+UPDATE config  SET displayName='Show Tap List Direction', validation='Vertical|Horizontal' WHERE configName = 'showVerticleTapList';
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'showAbvTxtWImg', '1', 'Show ABV Text If Image is shown', '1', NOW(), NOW() );
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'showBeerTableHead', '1', 'Show the Title Bar on Beer List', '1', NOW(), NOW() );
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'showPourListOnHome', '1', 'Show list of pours on home screen', '1', NOW(), NOW() );
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, validation, createdDate, modifiedDate ) VALUES
+( 'relayTrigger', '0', 'Show list of pours on home screen', '0', 'High|Low', NOW(), NOW() ),
+( 'hozTapListCol', '0', 'Number Of horizontal tap List Beer Column', '1', '2|1', NOW(), NOW() );
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'usePlaato', '0', 'Use Plaato Values', '1', NOW(), NOW() ),
+( 'usePlaatoTemp', '0', 'Use Plaato Temp', '1', NOW(), NOW() );
+
+
+CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'plaatoAuthToken', 'tinytext NULL' );
+CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'loadCellScaleRatio', 'int(11) DEFAULT NULL' );
+CALL addColumnIfNotExist(DATABASE(), 'tapconfig', 'loadCellTareOffset', 'int(11) DEFAULT NULL' );
+
+CALL addColumnIfNotExist(DATABASE(), 'kegs', 'hasContinuousLid', 'int(11) DEFAULT 0' );
+
+
+CREATE OR REPLACE VIEW vwGetActiveTaps
+AS
+
+SELECT
+	t.id,
+	b.id as 'beerId',
+	b.name,
+	b.untID,
+	bs.name as 'style',
+	br.name as 'breweryName',
+	br.imageUrl as 'breweryImageUrl',
+	b.rating,
+	b.notes,
+	b.abv,
+	b.og as og,
+	b.ogUnit as ogUnit,
+	b.fg as fg,
+	b.fgUnit as fgUnit,
+	b.srm as srm,
+	b.ibu as ibu,
+	IFNULL(k.startAmount, 0)        as startAmount,
+	IFNULL(k.startAmountUnit, '')   as startAmountUnit,
+    CASE WHEN k.hasContinuousLid = 0 THEN IFNULL(k.currentAmount, 0) ELSE IFNULL(k.startAmount, 0)  END      as remainAmount,
+    IFNULL(k.currentAmountUnit, '') as remainAmountUnit,
+	t.tapNumber,
+	t.tapRgba,
+    tc.flowPin as pinId,
+	s.rgb as srmRgb,
+	tc.valveOn,
+	tc.valvePinState,
+    tc.plaatoAuthToken
+FROM taps t
+	LEFT JOIN tapconfig tc ON t.id = tc.tapId
+	LEFT JOIN kegs k ON k.id = t.kegId
+	LEFT JOIN beers b ON b.id = k.beerId
+	LEFT JOIN beerStyles bs ON bs.id = b.beerStyleId
+	LEFT JOIN breweries br ON br.id = b.breweryId
+	LEFT JOIN srmRgb s ON s.srm = b.srm
+WHERE t.active = true
+ORDER BY t.id;
+
+
+
+CREATE OR REPLACE VIEW `vwKegs` 
+AS
+ SELECT 
+    k.id,
+    k.label,
+    k.kegTypeId,
+    k.make,
+    k.model,
+    k.serial,
+    k.stampedOwner,
+    k.stampedLoc,
+    k.notes,
+    k.kegStatusCode,
+    k.weight,
+    k.beerId,
+    k.onTapId,
+    t.tapNumber,
+    k.active,
+    CASE WHEN (k.emptyWeight IS NULL OR k.emptyWeight = '' OR k.emptyWeight = 0) AND kt.emptyWeight IS NOT NULL THEN kt.emptyWeight ELSE k.emptyWeight END AS emptyWeight,
+    CASE WHEN (k.emptyWeight IS NULL OR k.emptyWeight = '' OR k.emptyWeight = 0) AND kt.emptyWeight IS NOT NULL THEN kt.emptyWeightUnit ELSE k.emptyWeightUnit END AS emptyWeightUnit,
+    CASE WHEN (k.maxVolume IS NULL OR k.maxVolume = '' OR k.maxVolume = 0) AND kt.maxAmount IS NOT NULL THEN kt.maxAmount ELSE k.maxVolume END AS maxVolume,
+    CASE WHEN (k.maxVolume IS NULL OR k.maxVolume = '' OR k.maxVolume = 0) AND kt.maxAmount IS NOT NULL THEN kt.maxAmountUnit ELSE k.maxVolumeUnit END AS maxVolumeUnit,
+    k.startAmount,
+    k.startAmountUnit,
+    k.currentAmount,
+    k.currentAmountUnit,
+    k.fermentationPSI,
+    k.fermentationPSIUnit,
+    k.keggingTemp,
+    k.keggingTempUnit,
+    k.hasContinuousLid,
+    k.modifiedDate,
+    k.createdDate
+ FROM kegs k LEFT JOIN kegTypes kt 
+        ON k.kegTypeId = kt.id
+      LEFT JOIN taps t 
+        ON k.onTapId = t.id;
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'showPouredValue', '1', 'Show Poured Value', '1', NOW(), NOW() );
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'showLastPouredValue', '1', 'Show Last Poured Value', '1', NOW(), NOW() );
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'amountPerPint', '0', 'Amount per pint. > 0 then display pints remaining', '0', NOW(), NOW() );
+
+
+
+CREATE TABLE IF NOT EXISTS `accolades` (
+	`id` int(11) NOT NULL AUTO_INCREMENT,
+	`name` tinytext NOT NULL,
+	`type` tinytext NULL,
+	`srm` decimal(3,1) NULL,
+	`notes` text NULL,
+	`createdDate` TIMESTAMP NULL,
+	`modifiedDate` TIMESTAMP NULL,
+	
+	PRIMARY KEY (`id`)
+) ENGINE=InnoDB	DEFAULT CHARSET=latin1;
+CALL addColumnIfNotExist(DATABASE(), 'accolades', 'rank', 'int(11) DEFAULT NULL' );
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `beerAccolades` (
+	`id` int(11) NOT NULL AUTO_INCREMENT,
+	`beerId` int(11) NOT NULL,
+    `accoladeId`int(11) NOT NULL,
+	`amount` tinytext NULL,
+	
+	PRIMARY KEY (`id`),
+	FOREIGN KEY (`beerId`) REFERENCES beers(`id`) ON DELETE CASCADE,
+	FOREIGN KEY (`accoladeId`) REFERENCES accolades(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB	DEFAULT CHARSET=latin1;
+
+CREATE OR REPLACE VIEW `vwAccolades` 
+AS
+ SELECT 
+    a.*,
+    srm.rgb
+ FROM accolades a LEFT JOIN srmRgb srm
+        ON a.srm = srm.srm;
+INSERT IGNORE INTO accolades (id, name, type, srm, notes, createdDate, modifiedDate) VALUES('1','Gold','Medal','3.0','','2020-08-04 14:13:55','2020-08-04 14:14:34');
+INSERT IGNORE INTO accolades (id, name, type, srm, notes, createdDate, modifiedDate) VALUES('2','Silver','Medal','4.2','','2020-08-04 14:14:34','2020-08-04 14:14:34');
+INSERT IGNORE INTO accolades (id, name, type, srm, notes, createdDate, modifiedDate) VALUES('3','Bronze','Medal','9.6','','2020-08-04 14:14:34','2020-08-04 14:14:34');
+INSERT IGNORE INTO accolades (id, name, type, srm, notes, createdDate, modifiedDate) VALUES('4','BOS','Medal','9.6','','2020-08-04 14:14:34','2020-08-04 14:14:34');
+UPDATE accolades SET rank = id WHERE rank IS NULL;
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'showAccoladeCol', '0', 'Show Accolades Col', '1', NOW(), NOW() ),
+('AccoladeColNum', '7', 'Column number for Accolades', 0, NOW(), NOW() );
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+('numAccoladeDisplay', '3', 'Number of Accolades to display in a row/column', 0, NOW(), NOW() );
+
+
+CREATE TABLE IF NOT EXISTS `containerTypes` (
+	`id` int(11) NOT NULL AUTO_INCREMENT,
+	`displayName` text NOT NULL,
+	`volume` decimal(6,2) NOT NULL,
+	`volumeUnit` tinytext,
+	`total` int(11) NOT NULL,
+	`used` int(11) NOT NULL,
+	`createdDate` TIMESTAMP NULL,
+	`modifiedDate` TIMESTAMP NULL,
+	
+	PRIMARY KEY (`id`)
+) ENGINE=InnoDB	DEFAULT CHARSET=latin1;
+
+INSERT IGNORE INTO `containerTypes` ( id,displayName, volume, total, used, createdDate, modifiedDate ) VALUES
+( 1,'standardpint', '16.0', '0', '0', NOW(), NOW() ),
+( 2,'chalice', '16.0', '0', '0', NOW(), NOW() ),
+( 3,'nonic', '16.0', '0', '0', NOW(), NOW() ),
+( 4,'pilsner', '16.0', '0', '0', NOW(), NOW() ),
+( 5,'spiegelau', '16.0', '0', '0', NOW(), NOW() ),
+( 6,'goblet', '16.0', '0', '0', NOW(), NOW() ),
+( 7,'snifter', '16.0', '0', '0', NOW(), NOW() ),
+( 8,'stange', '16.0', '0', '0', NOW(), NOW() ),
+( 9,'stein', '16.0', '0', '0', NOW(), NOW() ),
+( 10,'tulip', '16.0', '0', '0', NOW(), NOW() ),
+( 11,'weizenglass', '16.0', '0', '0', NOW(), NOW() ),
+( 12,'willibecher', '16.0', '0', '0', NOW(), NOW() ),
+( 13,'wineglass', '16.0', '0', '0', NOW(), NOW() );
+
+INSERT IGNORE INTO `containerTypes` ( id,displayName, volume, total, used, createdDate, modifiedDate ) VALUES
+( 14,'flute', '16.0', '0', '0', NOW(), NOW() ),
+( 15,'teku', '16.0', '0', '0', NOW(), NOW() ),
+( 16,'thistle', '16.0', '0', '0', NOW(), NOW() );
+
+
+CALL addColumnIfNotExist(DATABASE(), 'beers', 'containerId', 'int(11) NULL DEFAULT 1' );
+CALL addColumnIfNotExist(DATABASE(), 'beerStyles', 'active', 'tinyint(1) NOT NULL DEFAULT 1' );
+CALL addColumnIfNotExist(DATABASE(), 'beerStyles', 'ogMinUnit', 'tinytext' );
+CALL addColumnIfNotExist(DATABASE(), 'beerStyles', 'ogMaxUnit', 'tinytext' );
+CALL addColumnIfNotExist(DATABASE(), 'beerStyles', 'fgMinUnit', 'tinytext' );
+CALL addColumnIfNotExist(DATABASE(), 'beerStyles', 'fgMaxUnit', 'tinytext' );
+
+UPDATE beerStyles SET ogMinUnit='sg' WHERE ogMinUnit IS NULL;
+UPDATE beerStyles SET ogMaxUnit='sg' WHERE ogMaxUnit IS NULL;
+UPDATE beerStyles SET fgMinUnit='sg' WHERE fgMinUnit IS NULL;
+UPDATE beerStyles SET fgMaxUnit='sg' WHERE fgMaxUnit IS NULL;
+
+ALTER TABLE beerStyles MODIFY srmMin decimal(7,1) NOT NULL ;
+ALTER TABLE beerStyles MODIFY srmMax decimal(7,1) NOT NULL ;
+
+CREATE OR REPLACE VIEW vwGetActiveTaps
+AS
+
+SELECT
+	t.id,
+	b.id as 'beerId',
+	b.name,
+	b.untID,
+	bs.name as 'style',
+	br.name as 'breweryName',
+	br.imageUrl as 'breweryImageUrl',
+	b.rating,
+	b.notes,
+	b.abv,
+	b.og as og,
+	b.ogUnit as ogUnit,
+	b.fg as fg,
+	b.fgUnit as fgUnit,
+	b.srm as srm,
+	b.ibu as ibu,
+	IFNULL(k.startAmount, 0)        as startAmount,
+	IFNULL(k.startAmountUnit, '')   as startAmountUnit,
+    CASE WHEN k.hasContinuousLid = 0 THEN IFNULL(k.currentAmount, 0) ELSE IFNULL(k.startAmount, 0)  END      as remainAmount,
+    IFNULL(k.currentAmountUnit, '') as remainAmountUnit,
+	t.tapNumber,
+	t.tapRgba,
+    tc.flowPin as pinId,
+	s.rgb as srmRgb,
+	tc.valveOn,
+	tc.valvePinState,
+    tc.plaatoAuthToken,
+    ct.displayName as containerType,
+    CASE WHEN lower(k.make) LIKE 'corn%' THEN 'corny' WHEN lower(k.make) LIKE '%firestone%' THEN 'corny' ELSE 'keg' END as kegType,
+    GROUP_CONCAT(CONCAT(a.id,'~',a.name,'~',ba.amount) ORDER BY a.rank) as accolades
+FROM taps t
+	LEFT JOIN tapconfig tc ON t.id = tc.tapId
+	LEFT JOIN kegs k ON k.id = t.kegId
+	LEFT JOIN beers b ON b.id = k.beerId
+	LEFT JOIN beerStyles bs ON bs.id = b.beerStyleId
+	LEFT JOIN breweries br ON br.id = b.breweryId
+	LEFT JOIN srmRgb s ON s.srm = b.srm
+	LEFT JOIN beerAccolades ba ON b.id = ba.beerId
+    LEFT JOIN accolades a on ba.accoladeId = a.id
+    LEFT JOIN containerTypes ct on ct.id = b.containerId
+WHERE t.active = true
+GROUP BY t.id
+ORDER BY t.id;
+        
+CREATE OR REPLACE VIEW vwGetFilledBottles
+AS
+
+SELECT
+	t.id,
+	b.id as 'beerId',
+	b.name,
+	b.untID,
+	bs.name as 'style',
+	br.name as 'breweryName',
+	br.imageUrl as 'breweryImageUrl',
+	b.rating,
+	b.notes,
+	b.abv,
+	b.og as og,
+	b.ogUnit as ogUnit,
+	b.fg as fg,
+	b.fgUnit as fgUnit,
+	b.srm as srm,
+	b.ibu as ibu,
+	bt.volume,
+	bt.volumeUnit,
+	t.startAmount,
+	IFNULL(null, 0) as amountPoured,
+	t.currentAmount as remainAmount,
+	t.capNumber,
+	t.capRgba,
+    NULL as pinId,
+	s.rgb as srmRgb,
+	1 as valveOn,
+	1 as valvePinState,
+    NULL,
+    'bottle' as containerType,
+    NULL as kegType,
+    GROUP_CONCAT(CONCAT(a.id,'~',a.name,'~',ba.amount) ORDER BY a.rank) as accolades
+FROM bottles t
+	LEFT JOIN beers b ON b.id = t.beerId
+	LEFT JOIN bottleTypes bt ON bt.id = t.bottleTypeId
+	LEFT JOIN beerStyles bs ON bs.id = b.beerStyleId
+	LEFT JOIN breweries br ON br.id = b.breweryId
+	LEFT JOIN srmRgb s ON s.srm = b.srm
+	LEFT JOIN beerAccolades ba ON b.id = ba.beerId
+    LEFT JOIN accolades a on ba.accoladeId = a.id
+WHERE t.active = true
+GROUP BY t.id
+ORDER BY t.id;
+
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'ABVColorSRM', '1', 'Use beers SRM color to fill in the ABV indicator', '1', NOW(), NOW() );
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'allowManualPours', '0', 'Allow Enter Of Manual Pours', '0', NOW(), NOW() );
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'updateDate', '', '', '0', NOW(), NOW() );
+UPDATE `config` SET `configValue` = NOW(), showOnPanel=0 WHERE `configName` = 'updateDate';
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'ClientID', '','Client ID', '0', NOW(), NOW() ),
+( 'ClientSecret','','Client Secret','0',NOW(),NOW() ),
+( 'RedirectUri','','Redirect URI','0',NOW(),NOW() );
+
+INSERT IGNORE INTO `config` ( configName, configValue, displayName, showOnPanel, createdDate, modifiedDate ) VALUES
+( 'showUntappdBreweryFeed', '0 ', 'Show brewery Untappd feed above header', '0', NOW(), NOW() );
+
+CALL addColumnIfNotExist(DATABASE(), 'beerStyles', 'boardNumber', 'int(11) DEFAULT 0' );
+
+UPDATE `config` SET `configValue` = '3.0.9.0' WHERE `configName` = 'version';

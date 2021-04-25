@@ -124,7 +124,7 @@ img {
 {
 	width: 99%;
 	height: 99%;
-	overflow: auto;
+	overflow-x: hidden;
 	
 }
 /* Header Styles */
@@ -148,8 +148,7 @@ img {
 	height: 50px;
 	text-align: center;
 	display:table-cell;
-	font-size: 1em;
-	font: 1em Georgia;
+	font: 3em Georgia bold;
 	color: white;
 	vertical-align: middle;
 	padding-top:25px;
@@ -173,8 +172,6 @@ img {
 	background-color: rgba(153,153,153,.23);
 }
 
-.tap-num{
-}
 .ibu{
 	width: 125px;
 	text-align: center;
@@ -199,6 +196,11 @@ img {
 
 .tap-num{
 	vertical-align: middle;
+}
+.accolades{
+	width: 250px;
+	text-align: center;
+	vertical-align: middle;	
 }
 
 .tapcircle {
@@ -301,10 +303,6 @@ img {
 }	
 .abv-indicator{
 	display: inline-block;
-	position: relative;
-	height:100%;
-	width:45%;
-	background: url(img/abv/stroke.png) no-repeat bottom left;
 }
 .abv-indicator .abv-full{
 	position: absolute;
@@ -353,7 +351,7 @@ img {
 	left: 0;
 	height: 100%;
 	width: 100%;
-	background: url(img/keg/stroke.png) no-repeat bottom left;	
+	background: url(img/keg/kegSvg.php?container=keg&empty) no-repeat bottom left;	
 }
 .keg-indicator .keg-full{
 	position: absolute;
@@ -390,14 +388,14 @@ img {
 	left: 0;
 	height: 100%;
 	width: 100%;
-	background: url(img/bottle/stroke.png) no-repeat bottom left;	
+	background: url(img/bottle/bottleSvg.php?container=bottle&empty) no-repeat bottom left;	
 }
 .bottle-indicator .bottle-full{
 	position: absolute;
 	bottom: 0;
 	left: 0;
 	width: 100%;
-	background: url(img/bottle/green.png) no-repeat bottom left;
+	background: url(img/bottle/bottleSvg.php?container=bottle&rgb=0,255,0) no-repeat bottom left;
 }
 .bottle-indicator .bottle-empty{
 	background-image: url(img/bottle/stroke.png);
@@ -423,9 +421,17 @@ align: right;
 }
 
 .beerfeed {
-color: #ccc;
-font-size: 12px;
 
+/*Untappd Quasi Styling*/
+height: 55px;
+width: 99%;
+background-color: rgba(245,242,232,.3);
+border: 2px #FFCC00 solid;
+border-radius: 1em;
+color: #F5F2E8;
+font: .3em Helvetica;
+text-shadow: 0px 0px white;
+justify-content: center;
 }
 
 
@@ -502,4 +508,27 @@ table p{
 	font: .8em Georgia;
 	color: #A0A0A0;
 	margin-top:20px; 
+}
+
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+.tooltip .tooltiptext {
+  visibility: hidden;
+  background-color: gray;
+  color: #000;
+  text-align: center;
+  border-radius: 6px;
+  text-shadow:0px 0px 0px #000;
+  font-size:12px;
+  padding: 5px 0;
+
+  /* Position the tooltip */
+  position: absolute;
+  z-index: 1;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
 }

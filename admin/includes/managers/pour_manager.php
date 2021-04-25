@@ -41,8 +41,8 @@ class PourManager extends Manager{
 		if($where != "") $sql = $sql."WHERE $where ";
 		$sql = $sql."ORDER BY createdDate DESC ";
 		$totalRows = 0;
-		if($results = $this->executeQueryWithResults($sql)){
-		    $totalRows = count($results);
+		if($results = $this->executeNonObjectQueryWithArrayResults("SELECT COUNT(*) as totalRows FROM ".$this->getViewName())){
+		    if(count($results) > 0) $totalRows = $results[0]['totalRows'];
 		}
 		$limitClause = $this->getLimitClause($limit, $page);
 		if($limitClause == "") return $results;
@@ -88,8 +88,8 @@ class PourManager extends Manager{
 	    $sql = $sql."GROUP BY userName";
 	    if($groupBy) $sql = $sql.", ".$groupBy;
 	    $totalRows = 0;
-	    if($results = $this->executeQueryWithResults($sql)){
-	        $totalRows = count($results);
+	    if($results = $this->executeNonObjectQueryWithArrayResults("SELECT COUNT(*) as totalRows FROM ".$this->getViewName())){
+	        if(count($results) > 0) $totalRows = $results[0]['totalRows'];
 	    }
 	    $limitClause = $this->getLimitClause($limit, $page);
 	    if($limitClause == "") return $results;
@@ -136,8 +136,8 @@ class PourManager extends Manager{
 	    $sql = $sql."GROUP BY tapNumber, tapId";
 	    if($groupBy) $sql = $sql.", ".$groupBy;
 	    $totalRows = 0;
-	    if($results = $this->executeQueryWithResults($sql)){
-	        $totalRows = count($results);
+	    if($results = $this->executeNonObjectQueryWithArrayResults("SELECT COUNT(*) as totalRows FROM ".$this->getViewName())){
+	        if(count($results) > 0) $totalRows = $results[0]['totalRows'];
 	    }
 	    $limitClause = $this->getLimitClause($limit, $page);
 	    if($limitClause == "") return $results;
@@ -193,8 +193,8 @@ class PourManager extends Manager{
 	        $sql = $sql.($groupBy == 'beerStyle'?"":", ").$groupBy;
 	    }
 	    $totalRows = 0;
-	    if($results = $this->executeQueryWithResults($sql)){
-	        $totalRows = count($results);
+	    if($results = $this->executeNonObjectQueryWithArrayResults("SELECT COUNT(*) as totalRows FROM ".$this->getViewName())){
+	        if(count($results) > 0) $totalRows = $results[0]['totalRows'];
 	    }
 	    $limitClause = $this->getLimitClause($limit, $page);
 	    if($limitClause == "") return $results;
@@ -250,9 +250,10 @@ class PourManager extends Manager{
 		$pour->set_userId(($user?$user->get_id():(new UserManager)->getUnknownUserId()));
 		$pour->set_beerId($beerId);
 		$this->save($pour);
-		
+
 		if($keg){
-    		$keg->set_currentAmount($keg->get_currentAmount() - $amount);
+		    $kegAmount = convert_volume($amount, $amountUnit, $keg->get_currentAmountUnit(), true);
+		    $keg->set_currentAmount($keg->get_currentAmount() - $kegAmount);
     		$kegManager->save($keg);
 		}
 	
@@ -319,10 +320,27 @@ class PourManager extends Manager{
 		    global $mysqli;
 		    $_SESSION['errorMessage'] = 'Unable To Save Pour:'.$mysqli->error;
 		} else{
-    		if($keg){
-        		$keg->set_currentAmount($keg->get_currentAmount() - $amount);
+		    if($keg){
+		        $kegAmount = convert_volume($amount, $amountUnit, $keg->get_currentAmountUnit(), true);
+		        $keg->set_currentAmount($keg->get_currentAmount() - $kegAmount);
         		$kegManager->save($keg);
     		}
 		}
+	}
+	
+	function updatePour($id, $pourAmount, $pourAmountUnit, $conversion) {
+	    $ret = true;
+	    $sql="SELECT * FROM pours where id = $id";
+	    $pour = $this->executeQueryWithSingleResult($sql);
+	    unset($sql);
+	    $updateSql = "";
+	    if( $pour ){
+	        if($pour->get_conversion()   != $conversion) 	$updateSql .= ($updateSql!=""?",":"")."conversion = NULLIF('" . $conversion . "', '')";
+	        if($pour->get_amountPoured() != $pourAmount) 	$updateSql .= ($updateSql!=""?",":"")."amountPoured = NULLIF('" . $pourAmount . "', '')";
+	        if($pour->get_amountPouredUnit() != $pourAmountUnit) 	$updateSql .= ($updateSql!=""?",":"")."amountPouredUnit = NULLIF('" . $pourAmountUnit . "', '')";
+	        if($updateSql != "")$sql = "UPDATE pours SET ".$updateSql." WHERE id = " . $id;
+	    }
+	    if(isset($sql) && $sql != "")$ret = $ret && $this->executeQueryNoResult($sql);
+	    return $ret;
 	}
 }

@@ -1,9 +1,11 @@
 <?php
 require_once __DIR__.'/header.php';
+require_once __DIR__.'/includes/managers/pour_manager.php';
 $htmlHelper = new HtmlHelper();
 $tapManager = new TapManager();
 $beerManager = new BeerManager();
 $kegManager = new KegManager();
+$pourManager = new PourManager();
 
 $config = getAllConfigs();
 
@@ -15,6 +17,14 @@ if( isset($_POST['enableTap']) && $_POST['enableTap'] != ""){
 	//The element holds the tap Id
 	$tapManager->enableTap($_POST['enableTap']);
 	file_get_contents('http://' . $_SERVER['SERVER_NAME'] . '/admin/trigger.php?value=valve');
+}
+
+if(isset($_POST['manualPour'])){
+    $RFID = $_POST['rfid'];
+    $PIN = $_POST['pin'];
+    $PULSE_COUNT =$_POST['pulseCount'];
+    $pourManager->pour($RFID, $PIN, $PULSE_COUNT);
+    exit;
 }
 
 if( isset($_POST['disableTap']) && $_POST['disableTap'] != ""){
@@ -38,10 +48,6 @@ if (isset ( $_POST ['saveTapConfig'] )) {
 		if(count($kegSelArr) > 0 && isset($kegSelArr[0]))$kegId = $kegSelArr[0];
 		if($kegId){			
 		    $selectedBeerId = explode("~", $_POST['beerId'][$ii])[0];
-		    if( ( !isset($kegSelArr[1]) || !$kegSelArr[1] || $tap->get_beerId() != $selectedBeerId ) ||
-			    ( !isset($kegSelArr[2]) || !$kegSelArr[2] || $tap->get_kegId() != $kegId ) ){
-			        $tapManager->tapKeg($tap, $kegId, $selectedBeerId);		
-			}
 			$keg = $kegManager->GetById($kegId);
 			if( $_POST ['startAmount'][$ii] != $_POST ['startAmountOriginal'][$ii]) {
 			    $keg->set_startAmount($_POST['startAmount'][$ii]);
@@ -51,41 +57,49 @@ if (isset ( $_POST ['saveTapConfig'] )) {
     			    $keg->set_maxVolumeUnit($_POST['startAmountUnit'][$ii]);
     			}
 			}
-			if( $_POST ['currentAmount'][$ii] != $_POST ['currentAmountOriginal'][$ii]) {
+			if( ISSET($_POST ['currentAmount']) && 
+			    ISSET($_POST ['currentAmountOriginal']) && 
+			    $_POST ['currentAmount'][$ii] != $_POST ['currentAmountOriginal'][$ii]) {
 			     $keg->set_currentAmount($_POST['currentAmount'][$ii]);
 			     $keg->set_currentAmountUnit($_POST['currentAmountUnit'][$ii]);
 			}
-			if( $_POST ['currentWeight'][$ii] != $_POST ['currentWeightOriginal'][$ii]) {
+			if( ISSET($_POST ['currentWeight']) && 
+			    ISSET($_POST ['currentWeightOriginal']) &&
+			    $_POST ['currentWeight'][$ii] != $_POST ['currentWeightOriginal'][$ii]) {
 			     $keg->set_Weight($_POST['currentWeight'][$ii]);
 			     $keg->set_WeightUnit($_POST['currentWeightUnit'][$ii]);
 			}
-    		if (isset ( $_POST ['fermentationPSI'][$ii] ) && 
-    		    $_POST['defaultFermentiationPSI'][$ii] != 0 &&
+			if (isset ( $_POST ['fermentationPSI'][$ii] ) &&
+			    !$config[ConfigNames::UseDefWeightSettings] &&
     		    $_POST ['fermentationPSI'][$ii] != $_POST ['fermentationPSIOriginal'][$ii]) {
     		    $keg->set_fermentationPSI($_POST ['fermentationPSI'][$ii]);
     		    $keg->set_fermentationPSIUnit($_POST ['fermentationPSIUnit'][$ii]);
     		}
     		
     	    if (isset ( $_POST ['keggingTemp'][$ii] ) &&
-    	        $_POST['defaultKeggingTemp'][$ii] != 0 &&
+    	        !$config[ConfigNames::UseDefWeightSettings] &&
     	        $_POST ['keggingTemp'][$ii] != $_POST ['keggingTempOriginal'][$ii]) {
     		    $keg->set_keggingTemp($_POST ['keggingTemp'][$ii]);
     		    $keg->set_keggingTempUnit($_POST ['keggingTempUnit'][$ii]);
     		}
 			$kegManager->Save($keg);
+		    if( ( !isset($kegSelArr[1]) || !$kegSelArr[1] || $tap->get_beerId() != $selectedBeerId ) ||
+			    ( !isset($kegSelArr[2]) || !$kegSelArr[2] || $tap->get_kegId() != $kegId ) ){
+			        $tapManager->tapKeg($tap, $kegId, $selectedBeerId);		
+			}
 		}else if($tap->get_kegId()){
 			//User indicated the tap was untapped
 			$tapManager->closeTap($tap, false);	
 		}
 		$tapManager->Save($tap);
 		
-		$tapNumber = "";
+		//$tapNumber = "";
 		$flowpin = 0;
 		$valveon = 0;
 		$valvepin = 0;
 		$countpergallon = 0;
 		$countpergallonUnit = UnitsOfMeasure::VolumeGallon;
-	
+		$plaatoAuthToken = "";
 		if (isset ( $_POST ['flowpin'][$ii] )) {
 			$flowpin = $_POST ['flowpin'][$ii];
 		}
@@ -112,8 +126,11 @@ if (isset ( $_POST ['saveTapConfig'] )) {
     			$countpergallonUnit = $_POST ['countpergallonUnit'][$ii];
     		}
 		}
+		if (isset ( $_POST ['plaatoAuthToken'][$ii] )) {
+		    $plaatoAuthToken = $_POST ['plaatoAuthToken'][$ii];
+		}
 	
-		$tapManager->saveTapConfig ( $id, $flowpin, $valvepin, $valveon, $countpergallon, $countpergallonUnit );
+		$tapManager->saveTapConfig ( $id, $flowpin, $valvepin, $valveon, $countpergallon, $countpergallonUnit, $plaatoAuthToken );
 		$ii++;
 	}
 	$reconfig = true;
@@ -134,13 +151,26 @@ if (isset ( $_POST ['saveSettings'] ) || isset ( $_POST ['configuration'] )) {
 }
 
 if($reconfig){
-	file_get_contents ( 'http://' . $_SERVER ['SERVER_NAME'] . '/admin/trigger.php?value=all' );
+    file_get_contents ( 'http://' . $_SERVER ['SERVER_NAME'] . '/admin/trigger.php?value=all' );
+    // Refreshes connected pages
+//    if(isset($config[ConfigNames::AutoRefreshLocal]) && $config[ConfigNames::AutoRefreshLocal]){
+      //  exec(__DIR__."/../includes/refresh.sh");
+    //}
 }
 
 $activeTaps = $tapManager->GetAllActive();
 $numberOfTaps = count($activeTaps);
 $beerList = $beerManager->GetAllActive();
 $kegList = $kegManager->GetAllActive();
+$allTapsConfigured = $config[ConfigNames::UseFlowMeter];
+foreach($activeTaps as $tap)
+{
+    if(null === $tap)continue;
+    $allTapsConfigured = $allTapsConfigured && $tap->get_flowPinId() != 0 && $tap->get_count() != 0;
+    if(!$allTapsConfigured)break;
+    if($config[ConfigNames::UseTapValves])$allTapsConfigured = $allTapsConfigured && $tap->get_valvePinId() != 0;
+    if(!$allTapsConfigured)break;
+}
 ?>
 <body>
 	<!-- Start Header  -->
@@ -162,7 +192,13 @@ include 'top_menu.php';
 		<div class="contentcontainer med left" >
 		<?php $htmlHelper->ShowMessage(); ?>
               
-        <a onClick="toggleSettings(this, 'settingsDiv')" class="collapsed heading">Settings</a>
+        
+		<table>
+		<tr>
+        <td><a onClick="toggleSettings(this, 'settingsDiv')" class="collapsed heading">Settings</a></td>
+        <?php if($config[ConfigNames::UseFlowMeter]) {?> <td><input type="checkbox" onclick="togglePinSettings(this)" <?php if(!$allTapsConfigured)echo 'checked';?>/>Show Pin Settings </td><?php }?>
+        </tr>
+        </table>
 		
 	<!-- Start Tap Config Form -->
 		<div id="settingsDiv" style="<?php echo (isset($_POST['settingsExpanded'])?$_POST['settingsExpanded']:'display:none'); ?>">
@@ -371,23 +407,30 @@ include 'top_menu.php';
                     <th>Tap<br>Description</th>
                     <th>Keg<br>(OnTap Number)</th>
                     <th style="width:10%">Beer</th>
-                    <th>Start<br>Amount (<?php echo (is_unit_imperial($config[ConfigNames::DisplayUnitVolume])?"Gal":"L");?>)</th>
+                    <th><div class="tooltip">Start<br>Amount (<?php echo (is_unit_imperial($config[ConfigNames::DisplayUnitVolume])?"Gal":"L");?>)<span class="tooltiptext">Set to 0 to hide the Remaining Keg on the list</span></div></th>
                     <th>Current<br>Amount(<?php echo (is_unit_imperial($config[ConfigNames::DisplayUnitVolume])?"Gal":"L");?>)</th>
 					<?php if($config[ConfigNames::UseKegWeightCalc]) { ?>
                         <th>Current<br>Weight(<?php echo $config[ConfigNames::DisplayUnitWeight]?>)</th>
     					<?php if(!$config[ConfigNames::UseDefWeightSettings]) { ?>
                             <th><div class="tooltip">Fermenter<br>PSI<span class="tooltiptext">0 If not fermenting under pressure</span></div></th>
-                            <th><div class="tooltip">Kegging<br>Temp<span class="tooltiptext">Temperature of Beer when kegged<br>room temp if not cold crashing or keg conditioning</span></div></th>
+                            <th><div class="tooltip">Kegging<br>Temp(<?php echo $config[ConfigNames::DisplayUnitTemperature]?>)<span class="tooltiptext">Temperature of Beer when kegged<br>room temp if not cold crashing or keg conditioning</span></div></th>
                         <?php } ?>
                     <?php } ?>
                     <?php if($config[ConfigNames::UseFlowMeter]) { ?>
-                        <th>Flow Pin</th>
-                        <th>Count<br>Per <?php echo (is_unit_imperial($config[ConfigNames::DisplayUnitVolume])?"Gal":"L");?></th>
+                        <th id="flowPin" <?php if($allTapsConfigured) echo 'style=display:none ' ?>>Flow Pin</th>
+                        <th id="flowCount" <?php if($allTapsConfigured) echo 'style=display:none ' ?>>Count<br>Per <?php echo (is_unit_imperial($config[ConfigNames::DisplayUnitVolume])?"Gal":"L");?></th>
+                    	<th>Calibrate</th>
+                    	<?php if($config[ConfigNames::AllowManualPours]) { ?>
+                    	<th>Manual<br/>Pour</th>
+                    	<?php }?>
                     <?php } ?>
                     <?php if($config[ConfigNames::UseTapValves]) { ?>
-                        <th>Valve Pin</th>
-                        <th>Valve<br>PI Pin?</th>
-                    	<th></th>
+                        <th id="valvepin" <?php if($allTapsConfigured) echo 'style=display:none ' ?>>Valve Pin</th>
+                        <th id="valvepinPi" <?php if($allTapsConfigured) echo 'style=display:none ' ?>>Valve<br>PI Pin?</th>
+                    	<th>Valve<br/>Control</th>
+                    <?php } ?>
+                    <?php if($config[ConfigNames::UsePlaato]) { ?>
+                		<th>Plaato<br/>Auth<br/>Token</th>
                     <?php } ?>
                 </tr>
             </thead>
@@ -406,18 +449,27 @@ include 'top_menu.php';
                         <td>
                             <?php 
                             if(isset($tap) ) { 
-
-                                
-                                $imgs = glob ( '../img/tap/tap'.$tap->get_id().'.*' );
-                                $img = "";
-                                if(count($imgs) > 0){
-                                   $img = $imgs[0];
-                                }
-                                
                             ?>
-                            <div style="width:105px">
-                                <input type="text" id="tapNumber<?php echo $tap->get_id();?>" class="smallbox" name="tapNumber[]" value="<?php echo $tap->get_tapNumber(); ?>" <?php echo ($img != ""?'style="background:url('.$img.') no-repeat bottom left; background-size:cover"':''); ?> />
-                                <a href="image_prompt.php?tapId=<?php echo $tap->get_id();?>" target="_blank"><span class="tooltip"><img src="img/icons/upload.png" /><span class="tooltiptext">Upload Tap Image</span></span></a>
+                            <div style="width:115px">
+                               <?php 
+                                    $style = "";
+                                    $hasImg = false;
+                                    if(isset($tap) && null !== $tap->get_tapRgba()) $style = "background-color: ".$htmlHelper->CreateRGB($tap->get_tapRgba());
+                                    if(isset($tap))
+        							{
+        							    $imgs = glob ( '../img/tap/tap'.$tap->get_id().'.*' );
+            							if(count($imgs) > 0)
+            							{
+            							    $style .= ($style != ""?";":"").'background:url('.$imgs[0].') no-repeat bottom left; background-size:cover; -webkit-border-radius:0px; -mox-border-radius:0px; height:100%; width:50px';
+            							    $hasImg = true;
+            							}
+        							}
+    							?> 
+    							<input type="text" id="tapNumber<?php echo $tap->get_id();?>" class="smallbox" name="tapNumber[]" value="<?php echo $tap->get_tapNumber(); ?>" <?php echo $style != ""?'style="'.$style.'"':""; ?> />
+    							<a href="image_prompt.php?id=<?php echo $tap->get_id();?>" target="_blank"><span class="tooltip"><img src="img/icons/upload.png" /><span class="tooltiptext">Upload Tap Image</span></span></a>
+                            	<?php if($hasImg) {?>
+                            		<a href="image_remove.php?id=<?php echo $tap->get_id();?>&type=tap" target="_blank"><span class="tooltip"><img src="img/icons/icon_missing.png" /><span class="tooltiptext">Remove Tap Image</span></span></a>
+                            	<?php }?>
                             </div>
                             <?php } ?>
                         </td>
@@ -517,37 +569,52 @@ include 'top_menu.php';
 						</td>      
 						<?php } ?>      
                         <?php if($config[ConfigNames::UseFlowMeter]) { ?>
-                                <td>
+                                <td <?php if($allTapsConfigured) echo 'style=display:none ' ?>>
                                     <?php if( isset($tap) ) { ?>
                                         <input type="text" id="flowpin<?php echo $tap->get_id();?>" class="smallbox" name="flowpin[]" value="<?php echo $tap->get_flowPinId(); ?>" />
                                     <?php } ?>
                                 </td>
-                                <td>
+                                <td <?php if($allTapsConfigured) echo 'style=display:none ' ?>>
                                     <?php if( isset($tap) ) { ?>
                                         <input type="text" id="countpergallon<?php echo $tap->get_id();?>" class="smallbox" name="countpergallon[]" value="<?php echo convert_count($tap->get_count(), $tap->get_countUnit(), $config[ConfigNames::DisplayUnitVolume]); ?>" />
                                         <input type="hidden" id="countpergallonOriginal<?php echo $tap->get_id();?>" class="smallbox" name="countpergallonOriginal[]" value="<?php echo convert_count($tap->get_count(), $tap->get_countUnit(), $config[ConfigNames::DisplayUnitVolume]); ?>" />
                                 	    <input type="hidden" id="countpergallonUnit<?php echo $tap->get_id();?>" class="smallbox" name="countpergallonUnit[]" value="<?php echo $config[ConfigNames::DisplayUnitVolume]; ?>" />
                                     <?php } ?>
                                 </td>
+                                <td>
+                                    <?php if( isset($tap) ) { ?>
+                                        <button name="calibrate[]" id="calibrate<?php echo $tap->get_id();?>" type="button" class="btn" style="white-space:nowrap;" value="1" onClick="calibrateTap(this, <?php echo $tap->get_id()?>)">Calibrate</button>
+                                    <?php } ?>
+                                </td>
+                    			<?php if($config[ConfigNames::AllowManualPours]) { ?>
+                                <td>
+                                    <?php if( isset($tap) && $tap->get_beerId() && $tap->get_flowPinId() && $tap->get_count() ) { ?>
+                                        <button name="manualPour[]" id="manualPour<?php echo $tap->get_id();?>" type="button" class="btn" style="white-space:nowrap;" value="1" onClick="manualPourTap(this, <?php echo $tap->get_id()?>, <?php echo $tap->get_flowPinId()?>, <?php echo $tap->get_count()?>, <?php echo is_unit_imperial($tap->get_countUnit())?"true":"false"?>)">Enter Pour</button>
+                                    <?php } ?>
+                                </td>
+                                <?php } ?>
                         <?php } ?>
                         <?php if($config[ConfigNames::UseTapValves]) { ?>
-                            <td>
+                            <td <?php if($allTapsConfigured) echo 'style=display:none ' ?>>
                                 <?php if( isset($tap) ) { ?>
                                     <input type="text" id="valvepin<?php echo $tap->get_id();?>" class="smallbox" name="valvepin[]" value="<?php echo abs($tap->get_valvePinId()); ?>" />
                                 <?php } ?>
                             </td>
-                            <td>
+                            <td <?php if($allTapsConfigured) echo 'style=display:none ' ?>>
                                 <?php if( isset($tap) ) { ?>
                                 	<input type="checkbox" id="valvepinPi<?php echo $tap->get_id();?>" class="xsmallbox" name="valvepinPi[<?php echo $tap->get_id();?>]" value="1" <?php if($tap->get_valvePinId() < 0)echo "checked"; ?>  />
                                 <?php } ?>
                             </td>
-                        <?php } ?>
-          				<?php 
-                            if($config[ConfigNames::UseTapValves]) {
-                            ?>
                             <td>
                                 <?php if( isset($tap) ) { ?>
                                     <button name="tapOverride[]" id="tapOverride<?php echo $tap->get_id();?>" type="button" class="btn" style="white-space:nowrap;" value="<?php echo $tap->get_valveOn(); ?>" onClick="changeTapState(this, <?php echo $tap->get_id()?>)"><?php echo ($tap->get_valveOn() < 1?TAP_TEXT_ENABLE:TAP_TEXT_DISABLE);?></button>
+                                <?php } ?>
+                            </td>
+                        <?php } ?>
+                        <?php if($config[ConfigNames::UsePlaato]) { ?>
+                            <td>
+                                <?php if( isset($tap) ) { ?>
+                                    <input type="text" id="plaatoAuthToken<?php echo $tap->get_id();?>" class="mediumbox" name="plaatoAuthToken[]" value="<?php echo $tap->get_plaatoAuthToken(); ?>" />
                                 <?php } ?>
                             </td>
                         <?php } ?>
@@ -713,6 +780,21 @@ include 'scripts.php';
 		}
 	}
 	
+	function togglePinSettings(checkBox) {
+		$("#flowPin").css("display", checkBox.checked?"visible":"none");
+		$("#flowCount").css("display", checkBox.checked?"visible":"none");
+		$("#valvepin").css("display", checkBox.checked?"visible":"none");
+		$("#valvepinPi").css("display", checkBox.checked?"visible":"none");
+		$("input[name='flowpin[]']").css("display", checkBox.checked?"visible":"none");
+		$("input[name='flowpin[]']").parent().css("display", checkBox.checked?"visible":"none");
+		$("input[name='countpergallon[]']").css("display", checkBox.checked?"visible":"none");
+		$("input[name='countpergallon[]']").parent().css("display", checkBox.checked?"visible":"none");
+		$("input[name='valvepin[]']").css("display", checkBox.checked?"visible":"none");
+		$("input[name='valvepin[]']").parent().css("display", checkBox.checked?"visible":"none");
+		$("input[name^='valvepinPi']").css("display", checkBox.checked?"visible":"none");
+		$("input[name^='valvepinPi']").parent().css("display", checkBox.checked?"visible":"none");
+	}
+	
 	function toggleDisplay(selectObject, kegSelectStart, secSelectBeerStart, tapId, tapNumber) {
 		var msgDiv = document.getElementById("messageDiv");
 		if(msgDiv != null) msgDiv.style.display = "none"
@@ -830,6 +912,52 @@ include 'scripts.php';
              });
   	}
 
+	function calibrateTap(btn, tapId){
+	    var form = document.createElement("form");
+	    var element2 = document.createElement("input"); 
+	    form.method = "POST";
+	    form.action = "calibrate_tap.php";   
+	    element2.value=tapId;
+	    element2.name="tapId";
+	    form.appendChild(element2);  
+	    document.body.appendChild(form);
+
+	    form.submit();
+  	}
+	function manualPourTap(btn, tapId, pinId, pulseCount, imperialUnits){
+		var promptAmount = prompt("How many <?php echo (is_unit_imperial($config[ConfigNames::DisplayUnitVolume])?"oz":"ml")?> was poured?", <?php echo (is_unit_imperial($config[ConfigNames::DisplayUnitVolume])?"12":"355")?> );
+		var displayImperial = <?php echo (is_unit_imperial($config[ConfigNames::DisplayUnitVolume])?"true":"false")?>;
+		var amount = parseInt(promptAmount);
+		if (!isNaN(amount)) { 
+			if( displayImperial != imperialUnits ){
+				//if displayingImperial amount (entered) is in oz but the tap is configured for ml 
+				if( displayImperial ){
+					amount = amount * 29.5735
+				}else{
+					amount = amount / 29.5735
+				}
+			}
+			var pulses = (amount/(imperialUnits?128:1000))*pulseCount;
+			data = { "manualPour": 1, "rfid" : -1, "pin" : pinId, "pulseCount" : pulses }
+			$.ajax(
+		            {
+	                   type: "POST",
+	                   url: "tap_list.php",
+	                   data: data,// data to send to above script page if any
+	                   cache: false,
+	    
+	                   success: function(response)
+	                   {
+		                   //alert("Pour Registered");
+	                   },
+	                   failure: function(response)
+	                   {
+		                   //alert("Pour Failed");
+	                   }
+		             });
+		  }
+  	}
+  	
 	$("input[name='countpergallon[]']").change(inputChanged);
     function inputChanged(){
         var changeInput = this.id + "changed"

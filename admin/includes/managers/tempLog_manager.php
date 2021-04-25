@@ -34,12 +34,12 @@ class TempLogManager extends Manager{
 	    $where = "";
 	    if($startTime && $startTime != "" && $startTime != " ") $where = $where.($where != ""?"AND ":"")."takenDate >= '$startTime' ";
 	    if($endTime && $endTime != "" && $endTime != " ") $where = $where.($where != ""?"AND ":"")."takenDate < '$endTime' ";
-	    if($probe)  $where = $where.($where != ""?"AND ":"")."probe = $probe ";
+	    if($probe)  $where = $where.($where != ""?"AND ":"")."probe = '$probe' ";
 	    if($where != "") $sql = $sql."WHERE $where ";
 	    $sql = $sql."ORDER BY takenDate DESC ";
 	    $totalRows = 0;
-	    if($results = $this->executeQueryWithResults($sql)){
-	        $totalRows = count($results);
+	    if($results = $this->executeNonObjectQueryWithArrayResults("SELECT COUNT(*) as totalRows FROM ".$this->getViewName())){
+	        if(count($results) > 0) $totalRows = $results[0]['totalRows'];
 	    }
 	    $limitClause = $this->getLimitClause($limit, $page);
 	    if($limitClause == "") return $results;

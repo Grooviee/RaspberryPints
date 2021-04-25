@@ -2,6 +2,7 @@
 require_once __DIR__.'/manager.php';
 require_once __DIR__.'/../models/tap.php';
 require_once __DIR__.'/tapEvent_manager.php';
+require_once __DIR__.'/user_manager.php';
 require_once __DIR__.'/../models/tapEvent.php';
 
 class TapManager extends Manager{
@@ -60,12 +61,16 @@ class TapManager extends Manager{
 			$ret = $ret && $this->executeQueryNoResult($sql);
 		}
 		
-		$sql="UPDATE taps SET active = CASE WHEN id <= $newTapNumber THEN 1 ELSE 0 END, modifiedDate = NOW() WHERE id > 0";
+		$sql="UPDATE taps SET active = CASE WHEN id <= $newTapNumber THEN 1 ELSE 0 END, kegId=CASE WHEN id <= $newTapNumber THEN kegId ELSE NULL END, modifiedDate = NOW() WHERE id > 0";
 		$ret = $ret && $this->executeQueryNoResult($sql);
 		
 		if($ret){
 			saveConfigValue(ConfigNames::NumberOfTaps, $newTapNumber);
-			$_SESSION['successMessage'] = "Number of Taps Updated to $newTapNumber";			
+			$_SESSION['successMessage'] = "Number of Taps Updated to $newTapNumber";	
+			
+			//Clear the kegs from the tap they are in
+			$sql="UPDATE kegs SET onTapId = null, kegStatusCode='NEEDS_CLEANING' WHERE onTapId IS NOT NULL AND onTapId NOT IN (SELECT id FROM taps WHERE active = 1)";
+			$ret = $ret && $this->executeQueryNoResult($sql);
 		}
 		
 		return $ret;
@@ -127,7 +132,7 @@ class TapManager extends Manager{
 		$tapEvent->set_tapId($tap->get_id());
 		$tapEvent->set_kegId($kegId);
 		$tapEvent->set_beerId($beerId);
-		$tapEvent->set_userId($_SESSION['myuserid']);
+		$tapEvent->set_userId(isset($_SESSION['myuserid'])?$_SESSION['myuserid']:USER_ID_SYSTEM);
 		$keg = $kegManager->GetByID($kegId);
 		if($keg) $tapEvent->set_amount($keg->get_currentAmount());
 		if($keg) $tapEvent->set_amountUnit(is_unit_imperial($keg->get_currentAmountUnit())?UnitsOfMeasure::VolumeGallon:UnitsOfMeasure::VolumeLiter);
@@ -147,7 +152,7 @@ class TapManager extends Manager{
 		return $this->executeQueryNoResult($sql);
 	}
 	
-	function saveTapConfig($id, $flowPin, $valvePin, $valveOn, $countpergallon, $countpergallonunit) {
+	function saveTapConfig($id, $flowPin, $valvePin, $valveOn, $countpergallon, $countpergallonunit, $plaatoAuthToken) {
 		$ret = true;
 		$sql="SELECT * FROM tapconfig where tapId = $id";
 		$tap = $this->executeQueryWithSingleResult($sql);
@@ -159,16 +164,17 @@ class TapManager extends Manager{
 			if($tap->get_valveOn() != $valveOn) 		$updateSql .= ($updateSql!=""?",":"")."valveOn = NULLIF('" . $valveOn . "', '')"; 
 			if($tap->get_count() != $countpergallon) 	$updateSql .= ($updateSql!=""?",":"")."count = NULLIF('" . $countpergallon . "', '')";
 			if($tap->get_countUnit() != $countpergallonunit) 	$updateSql .= ($updateSql!=""?",":"")."countUnit = NULLIF('" . $countpergallonunit . "', '')";
+			if($tap->get_plaatoAuthToken() != $plaatoAuthToken) $updateSql .= ($updateSql!=""?",":"")."plaatoAuthToken = NULLIF('" . $plaatoAuthToken . "', '')";
 			if($updateSql != "")$sql = "UPDATE tapconfig SET ".$updateSql." WHERE tapId = " . $id;
 		} else {
-			$sql = "INSERT INTO tapconfig (tapId, flowPin, valvePin, valveOn, count, countUnit) VALUES(" . 
-			                             $id.", ".$flowPin.", ".$valvePin. ", ".$valveOn.", ".$countpergallon.", '".$countpergallonunit."')";
+			$sql = "INSERT INTO tapconfig (tapId, flowPin, valvePin, valveOn, count, countUnit, plaatoAuthToken) VALUES(" . 
+			 			$id.", ".$flowPin.", ".$valvePin. ", ".$valveOn.", ".$countpergallon.", '".$countpergallonunit."','".$plaatoAuthToken."')";
 		}
 		if(isset($sql) && $sql != "")$ret = $ret && $this->executeQueryNoResult($sql);
 		return $ret;
 	}
 	
-	function saveTapLoadCellInfo($id, $loadCellCmdPin, $loadCellRspPin, $loadCellUnit) {
+	function saveTapLoadCellInfo($id, $loadCellCmdPin, $loadCellRspPin, $loadCellScaleRatio, $loadCellTareOffset, $loadCellUnit) {
 	    $ret = true;
 	    $sql="SELECT * FROM tapconfig where tapId = $id";
 	    $tap = $this->executeQueryWithSingleResult($sql);
@@ -177,11 +183,13 @@ class TapManager extends Manager{
 	    if( $tap ){
 	        if($tap->get_loadCellCmdPin() != $loadCellCmdPin) $updateSql .= ($updateSql!=""?",":"")."loadCellCmdPin = NULLIF('" . $loadCellCmdPin . "', '')";
 	        if($tap->get_loadCellRspPin() != $loadCellRspPin) $updateSql .= ($updateSql!=""?",":"")."loadCellRspPin = NULLIF('" . $loadCellRspPin . "', '')";
+	        if($tap->get_loadCellScaleRatio() != $loadCellScaleRatio) $updateSql .= ($updateSql!=""?",":"")."loadCellScaleRatio = NULLIF('" . $loadCellScaleRatio . "', '')";
+	        if($tap->get_loadCellTareOffset() != $loadCellTareOffset) $updateSql .= ($updateSql!=""?",":"")."loadCellTareOffset = NULLIF('" . $loadCellTareOffset . "', '')";
 	        if($tap->get_loadCellUnit() != $loadCellUnit) $updateSql .= ($updateSql!=""?",":"")."loadCellUnit = NULLIF('" . $loadCellUnit . "', '')";
 	        if($updateSql != "")$sql = "UPDATE tapconfig SET ".$updateSql." WHERE tapId = " . $id;
 	    } else {
-	        $sql = "INSERT INTO tapconfig (tapId, loadCellCmdPin, loadCellRspPin, loadCellUnit) VALUES(" .
-	   	        $id.", ".$loadCellCmdPin.", ".$loadCellRspPin.", '".$loadCellUnit."')";
+	        $sql = "INSERT INTO tapconfig (tapId, loadCellCmdPin, loadCellRspPin, loadCellScaleRatio, loadCellTareOffset, loadCellUnit) VALUES(" .
+	   	        $id.", ".$loadCellCmdPin.", ".$loadCellRspPin.", ".$loadCellScaleRatio.", ".$loadCellTareOffset.", '".$loadCellUnit."')";
 	    }
 	    if(isset($sql) && $sql != "")$ret = $ret && $this->executeQueryNoResult($sql);
 	    return $ret;
