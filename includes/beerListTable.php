@@ -312,12 +312,13 @@ if($editting) $maxTapCol = 1;
 				<td class="keg" >
 				<?php if(isset($beer) && $beer['beername']){ ?>
 				<?php 
-				if (!isset($beer['startAmountUnit'])) { echo $beer['beername']; }
-				//Convert to the correct units (use gal and l)
+				if (isset($beer['startAmountUnit']) && isset($beer['remainAmountUnit'])) { 
+					//Convert to the correct units (use gal and l)
 				    $beer['startAmount']  = convert_volume($beer['startAmount'], $beer['startAmountUnit'], $config[ConfigNames::DisplayUnitVolume], TRUE);
 					$beer['startAmountUnit'] = $config[ConfigNames::DisplayUnitVolume];
 				    $beer['remainAmount'] = convert_volume($beer['remainAmount'], $beer['remainAmountUnit'], $config[ConfigNames::DisplayUnitVolume], TRUE);
 				    $beer['remainAmountUnit'] = $config[ConfigNames::DisplayUnitVolume]; 
+				}
 				?>
 				<?php } ?>
 				<?php if(isset($beer) && $beer['beername'] && 

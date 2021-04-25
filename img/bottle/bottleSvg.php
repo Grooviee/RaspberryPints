@@ -3,7 +3,7 @@
 <?php
 $foamRgb = "255,255,255";
 /* this just feels wrong */
-if ($_GET['rgb']){
+if (isset($_GET['rgb'])){
   $rgb = explode(',',$_GET['rgb']);
   $r = $rgb[0];
   $g = $rgb[1];
