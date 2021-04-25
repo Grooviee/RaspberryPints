@@ -134,7 +134,7 @@
 				"rating" => $b['rating'],
 				"srmRgb" => $b['srmRgb'],
 			    "valvePinState" => $b['valvePinState'],
-			    "plaatoAuthToken" => $b['plaatoAuthToken'],
+			    "plaatoAuthToken" => '',//$b['plaatoAuthToken'],
 			    "containerType" => $b['containerType'],
 			    "kegType" => $b['kegType'],
 				"accolades" => $b['accolades']
