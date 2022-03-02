@@ -19,31 +19,39 @@ function utBreweryFeed($config, $breweryId) {
 		$ut = new Pintlabs_Service_Untappd($config);
 		$bfeed = $ut->breweryFeed($breweryId, '', '', 3)->response->checkins;
 	
-		$bfeeds .="<table width=95%><tr>";
+		$bfeeds .="<table width=95%>";
+		$bfeeds .="<tr>";
 
 		foreach ($bfeed->items as $i) {
 			
 			$j = $i->beer->beer_name;
-			$bfeeds .="<td width=20%><table width=95%><tr><td><div class='beerfeed'>";
-			$bfeeds .="<center><div class=circular style='width: 49px;height: 49px;background-image: url(". $i->user->user_avatar ."); background-size: cover;border: 2px #FFCC00 solid; border-radius: 100px; margin: 1px;float: left;'></div>";
-			$bfeeds .="<center><div class=circular style='width: 49px;height: 49px;background-image: url(". $i->beer->beer_label .");background-size: cover; display: block; border: 2px #FFCC00 solid; border-radius: 100px; margin: 1px; float: right'></div>";
+			$bfeeds .="<td width=20%>";
+			$bfeeds .="<table width=95%>";
+			$bfeeds .="<tr>";
+			$bfeeds .="<td>";
+			$bfeeds .="<div class='beerfeed'>";
 			
-			// $bfeeds .="".$i->user->user_name."<br />";
+			$bfeeds .="<div class='circular' style='width: 49px;height: 49px;background-image: url(". $i->user->user_avatar ."); background-size: cover;border: 2px #FFCC00 solid; border-radius: 100px; margin: 1px;float: left;'></div>";
 			
+			$bfeeds .="<div class='circular' style='width: 49px;height: 49px;background-image: url(". $i->beer->beer_label .");background-size: cover; display: block; border: 2px #FFCC00 solid; border-radius: 100px; margin: 1px; float: right'></div>";
+			
+			$bfeeds .= '<div>';
 			$bfeeds .="".$i->user->first_name." ";
 			$bfeeds .="".$i->user->last_name." is drinking a <br />";
 			
-			$bfeeds .="".$i->beer->beer_name." <br />";
-			
-			$bfeeds .="by ".$i->brewery->brewery_name."";
-			
+			$bfeeds .="".$i->beer->beer_name."";
+			$bfeeds .= '</div>';
 
-			$bfeeds .="</td></tr></table>";
-			$bfeeds .="</div></td>";
+			$bfeeds .="</td>";
+			$bfeeds .="</tr>";
+			$bfeeds .="</table>";
+			$bfeeds .="</div>";
+			$bfeeds .="</td>";
 		 
-	}
+		}
 
-		$bfeeds .="</tr></table>";
+		$bfeeds .="</tr>";
+		$bfeeds .="</table>";
 		$fp = false;
 		try{ $fp = fopen($cachefile, 'w'); } catch(Exception $e){}
 		if($fp)
@@ -85,7 +93,7 @@ function beerRATING($config, $untID, $rating=NULL, $displayOnly=TRUE ) {
         			$feed = $ut->beerInfo($untID)->response->beer;
         			$rs = $feed->rating_score;
         			$rs = .5*floor($rs/.5);
-        			$img = "<span class=\"rating small\" style=\"background-position: 0 ".(-48*$rs)."px;\"></span><span class=\"num\">(".$rs.")</span>";
+        			$img = '<span class="rating small" style="background-position: 0 '.(-48*$rs).'px;"></span><span class="num">('.$rs.')</span>';
     			} catch(Exception $e) {
     			    
     			}
@@ -108,7 +116,7 @@ function beerRATING($config, $untID, $rating=NULL, $displayOnly=TRUE ) {
     //untappd not set or could not get use local rating
     if(isset($rating) && NULL !== $rating){
         $rs = .5*floor($rating/.5);
-        echo "<p class=\"rating\"><span class=\"rating small\" style=\"background-position: 0 ".(-48*$rs)."px;\"></span><span class=\"num\">(".$rs.")</span></p>";
+        echo '<p class="rating"><span class="rating small" style="background-position: 0 '.(-48*$rs).'px;"></span><span class="num">('.$rs.')</span></p>';
     }
  
  }
@@ -125,7 +133,7 @@ function beerRATING($config, $untID, $rating=NULL, $displayOnly=TRUE ) {
 	
 	if( isset($beerId) ) $imgFiles = glob ( 'img/beer/beer'.$beerId.'.*' );
 	if( isset($beerId) && count($imgFiles) > 0 ){
-	    $imgs = "<img src=".$imgFiles[0]." style=\"border:0;width:100px\">";
+	    $imgs = '<img src='.$imgFiles[0].' style="border:0;width:100px;">';
 	    echo $imgs;
 	}
 	//If display then only use the cache file otherwise we are saving the beer and want to update the cache
@@ -145,7 +153,7 @@ function beerRATING($config, $untID, $rating=NULL, $displayOnly=TRUE ) {
 			    return;
 			}
 		} 
-        $imgs = "<img src=".$img." style=\"border:0;width:100px\">";
+        $imgs = '<img src='.$img.' style="border:0;width:100px;">';
 		$fp = false;
 		try{ $fp = fopen($cachefile, 'w'); } catch(Exception $e){}
 		if($fp)
